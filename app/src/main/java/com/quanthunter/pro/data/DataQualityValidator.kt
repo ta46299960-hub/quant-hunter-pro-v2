@@ -24,12 +24,12 @@ class DataQualityValidator {
         var rejected = 0
 
         for (candle in sorted) {
-            if (!seen.add(candle.timestampEpochMillis)) {
-                duplicates++
-                continue
-            }
             if (!candle.hasValidValues() || candle.timestampEpochMillis > nowMillis) {
                 rejected++
+                continue
+            }
+            if (!seen.add(candle.timestampEpochMillis)) {
+                duplicates++
                 continue
             }
             accepted += candle
