@@ -135,68 +135,144 @@ class MainActivity : Activity() {
         content.addView(box, params)
     }
 
+    private fun hero(icon: String, title: String, subtitle: String, accent: Int) {
+        val panel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = rounded(if (lightTheme) Color.rgb(250, 248, 240) else Color.rgb(30, 32, 35), accent)
+            setPadding(12, 14, 12, 14)
+        }
+        panel.addView(label(icon, 28f, accent, true))
+        panel.addView(label(title, 21f, accent, true))
+        panel.addView(label(subtitle, 12f, primaryText))
+        val p = LinearLayout.LayoutParams(-1, -2)
+        p.setMargins(0, 6, 0, 12)
+        content.addView(panel, p)
+    }
+
+    private fun metricRow(items: List<Pair<String, String>>, accent: Int) {
+        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        items.forEach { item ->
+            val tile = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER
+                background = rounded(panelBg, accent)
+                setPadding(3, 10, 3, 10)
+                addView(label(item.first, 17f, accent, true))
+                addView(label(item.second, 10f, mutedText))
+            }
+            val p = LinearLayout.LayoutParams(0, -2, 1f)
+            p.setMargins(3, 3, 3, 8)
+            row.addView(tile, p)
+        }
+        content.addView(row)
+    }
+
     private fun renderContent(section: String) {
-        content.addView(label(sectionTitle(section), 23f, neon, true))
         val ar = !english
+        val accent = when (section) {
+            "ماسح الأسواق", "صائد الفرص" -> neon
+            "غرفة المراقبة" -> Color.rgb(80, 190, 255)
+            "التداول التجريبي" -> Color.rgb(190, 145, 255)
+            "مختبر التحليل" -> Color.rgb(255, 155, 75)
+            "إدارة المخاطر" -> Color.rgb(255, 100, 115)
+            "الإعدادات" -> Color.rgb(170, 180, 195)
+            else -> gold
+        }
+        val subtitle = when (section) {
+            "مركز القيادة" -> if (ar) "نظرة موحدة على حالة المنظومة والأسواق" else "Unified view of system and market health"
+            "ماسح الأسواق" -> if (ar) "اكتشاف منظم للفرص عبر مستويات فحص متعددة" else "Structured opportunity discovery at multiple scan depths"
+            "صائد الفرص" -> if (ar) "ترتيب الفرص مع تفسير أسباب التقييم" else "Ranked opportunities with explainable scoring"
+            "غرفة المراقبة" -> if (ar) "متابعة الأصول والتنبيهات في مساحة واحدة" else "Track assets and alerts in one workspace"
+            "التداول التجريبي" -> if (ar) "تدريب ومحاكاة دون إرسال أوامر حقيقية" else "Practice and simulation without live orders"
+            "مختبر التحليل" -> if (ar) "اختبارات تاريخية وتحليل متعدد الأطر" else "Historical testing and multi-timeframe research"
+            "إدارة المخاطر" -> if (ar) "ضبط التعرض وحجم المركز قبل المحاكاة" else "Control exposure and position size before simulation"
+            else -> if (ar) "تخصيص التجربة واللغة والتنبيهات" else "Customize appearance, language and alerts"
+        }
+        val icon = when (section) {
+            "مركز القيادة" -> "◆"
+            "ماسح الأسواق" -> "⌕"
+            "صائد الفرص" -> "✦"
+            "غرفة المراقبة" -> "◉"
+            "التداول التجريبي" -> "⇄"
+            "مختبر التحليل" -> "⌁"
+            "إدارة المخاطر" -> "⬡"
+            else -> "⚙"
+        }
+        hero(icon, sectionTitle(section), subtitle, accent)
+
         when (section) {
             "مركز القيادة" -> {
-                card(if (ar) "حالة النظام" else "System status",
-                    if (ar) "الواجهة تعمل. لم يتم ربط مزودي بيانات حقيقية بعد." else "Interface ready. Live market providers are not connected yet.", neon)
-                card(if (ar) "الأسواق المدعومة" else "Supported markets", "CRYPTO  •  FOREX  •  STOCKS  •  INDICES  •  COMMODITIES")
-                card(if (ar) "منهج التحليل" else "Analysis method",
-                    if (ar) "Hybrid: سياق عام للسوق مع قواعد وأوزان مستقلة لكل سوق." else "Hybrid: broad market context with independent rules and weights per market.")
+                metricRow(listOf("05" to (if (ar) "فئات أسواق" else "Markets"), "08" to (if (ar) "أقسام" else "Modules"), "HYBRID" to (if (ar) "منهج" else "Model")), gold)
+                card(if (ar) "حالة المنظومة" else "System health",
+                    if (ar) "الواجهة جاهزة. مزودو الأسعار الحقيقية لم يتم ربطهم بعد." else "Interface ready. Live price providers are not connected yet.", neon)
                 card(if (ar) "بوابة جودة البيانات" else "Data quality gate",
-                    if (ar) "البيانات القديمة أو غير الصالحة لا تُستخدم لإصدار إشارة موثوقة." else "Stale or invalid data is blocked from trusted signal generation.", neon)
+                    if (ar) "يتم رفض البيانات القديمة أو المشوهة قبل استخدامها في التقييم." else "Stale or malformed data is rejected before scoring.", gold)
+                card(if (ar) "تغطية الأسواق" else "Market coverage", "CRYPTO  •  FOREX  •  STOCKS  •  INDICES  •  COMMODITIES")
             }
             "ماسح الأسواق" -> {
-                card(if (ar) "محرك المسح متعدد الأعماق" else "Multi-depth scanning engine",
-                    if (ar) "اختر مستوى الفحص. العمق الأعلى يدرس بيانات أكثر وقد يحتاج وقتاً وموارد إضافية." else "Choose a scan depth. Higher levels inspect more data and may require additional time and resources.", neon)
-                val depthRow = LinearLayout(this).apply {
-                    orientation = LinearLayout.HORIZONTAL
-                    gravity = Gravity.CENTER_VERTICAL
-                }
-                val depthOptions = listOf("32", "64", "128", "256", "AUTO")
-                depthOptions.forEach { depth ->
-                    val caption = if (depth == "AUTO") { if (ar) "تلقائي" else "AUTO" } else depth
-                    val item = chip(caption, selectedDepth == depth) {
-                        selectedDepth = depth
-                        showSection("ماسح الأسواق")
-                    }
-                    val params = LinearLayout.LayoutParams(0, -2, 1f)
-                    params.setMargins(2, 4, 2, 4)
-                    depthRow.addView(item, params)
+                card(if (ar) "مستويات عمق الفحص" else "Scan depth", if (ar) "اختر نطاق التحليل. العمق الأكبر قد يحتاج موارد ووقتاً أكثر." else "Choose the analysis window. Higher depth may need more time and device resources.", accent)
+                val depthRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+                listOf("32", "64", "128", "256", "AUTO").forEach { depth ->
+                    val caption = if (depth == "AUTO" && ar) "تلقائي" else depth
+                    val item = chip(caption, selectedDepth == depth) { selectedDepth = depth; showSection(section) }
+                    val p = LinearLayout.LayoutParams(0, -2, 1f); p.setMargins(2, 4, 2, 4); depthRow.addView(item, p)
                 }
                 content.addView(depthRow)
-                val depthDescription = when (selectedDepth) {
-                    "32" -> if (ar) "فحص سريع — نطاق بيانات محدود." else "Quick scan — compact data window."
-                    "64" -> if (ar) "فحص متوازن — توازن بين السرعة والتغطية." else "Balanced scan — speed and coverage."
-                    "128" -> if (ar) "فحص متقدم — تحليل أوسع للبيانات المتاحة." else "Advanced scan — broader analysis of available data."
-                    "256" -> if (ar) "فحص عميق — أعلى نطاق حسابي ضمن الخيارات." else "Deep scan — largest computational window."
-                    else -> if (ar) "التلقائي الذكي — يختار المستوى وفق الموارد وجودة البيانات." else "Smart auto — selects a level based on device resources and data quality."
+                val desc = when (selectedDepth) {
+                    "32" -> if (ar) "سريع — نافذة فحص صغيرة." else "Quick — compact scan window."
+                    "64" -> if (ar) "متوازن — توازن بين السرعة والتغطية." else "Balanced — speed and coverage."
+                    "128" -> if (ar) "متقدم — نطاق تحليل أوسع." else "Advanced — broader analysis window."
+                    "256" -> if (ar) "عميق — أكبر نطاق حسابي متاح." else "Deep — largest available computation window."
+                    else -> if (ar) "تلقائي ذكي — يحدد العمق وفق موارد الجهاز وجودة البيانات." else "Smart auto — selects depth from device capacity and data quality."
                 }
-                card(if (ar) "العمق المحدد: $selectedDepth" else "Selected depth: $selectedDepth", depthDescription, neon)
-                card(if (ar) "حالة البيانات" else "Data status",
-                    if (ar) "بانتظار ربط مزود بيانات حقيقي. لن تظهر نتائج سوق مباشرة قبل التحقق من المصدر والطابع الزمني." else "Waiting for a live data provider. No live market results are shown before source and timestamp validation.")
+                card((if (ar) "الاختيار الحالي: " else "Current selection: ") + selectedDepth, desc, neon)
+                card(if (ar) "حالة مصدر البيانات" else "Data source status",
+                    if (ar) "بانتظار ربط مزود حقيقي. لن يتم اختلاق أسعار أو نتائج مباشرة." else "Awaiting a live provider. No prices or live results are fabricated.", mutedText)
             }
-            "صائد الفرص" -> card(if (ar) "محرك صائد الفرص" else "Opportunity engine",
-                if (ar) "سيجمع الاتجاه والزخم والسيولة والتذبذب وتوافق الأطر الزمنية. الثقة ليست احتمال ربح." else "Combines trend, momentum, liquidity, volatility and timeframe alignment. Confidence is not win probability.", neon)
-            "غرفة المراقبة" -> card(if (ar) "قوائم المتابعة" else "Watchlists",
-                if (ar) "ستتم إضافة قوائم مخصصة وتنبيهات عند اكتمال اتصال البيانات." else "Custom watchlists and alerts will be enabled after data connectivity.")
-            "التداول التجريبي" -> card(if (ar) "Paper Trading" else "Paper Trading",
-                if (ar) "محاكاة فقط. لا يتم إرسال أوامر تداول حقيقية أو ربط حساب وسيط." else "Simulation only. No live orders or broker account execution.")
-            "مختبر التحليل" -> card(if (ar) "مختبر التحليل" else "Analysis Lab",
-                if (ar) "اختبار تاريخي مع الرسوم والسبريد والانزلاق والتحقق خارج العينة." else "Historical testing with fees, spread, slippage and out-of-sample validation.")
-            "إدارة المخاطر" -> card(if (ar) "إدارة المخاطر" else "Risk Manager",
-                if (ar) "سيحسب حجم المركز والوقف والتعرض قبل السماح بأي محاكاة." else "Position sizing, stop distance and exposure checks before simulation.", neon)
+            "صائد الفرص" -> {
+                metricRow(listOf("TREND" to (if (ar) "اتجاه" else "Trend"), "MOM" to (if (ar) "زخم" else "Momentum"), "MTF" to (if (ar) "أطر" else "Frames")), neon)
+                card(if (ar) "منهج ترتيب الفرص" else "Opportunity ranking",
+                    if (ar) "يجمع الاتجاه والزخم والسيولة والحجم والتذبذب وتوافق الأطر الزمنية، مع فحص الاختراقات الوهمية." else "Combines trend, momentum, liquidity, volume, volatility and timeframe agreement, including false-breakout checks.", neon)
+                card(if (ar) "تفسير النتيجة" else "Score interpretation",
+                    if (ar) "درجة الثقة تعبر عن توافق الأدلة، وليست احتمالاً للربح." else "Confidence measures evidence agreement, not probability of profit.")
+            }
+            "غرفة المراقبة" -> {
+                card(if (ar) "قائمة المتابعة" else "Watchlist",
+                    if (ar) "ستظهر الأصول المضافة مع السعر ووقت آخر تحديث ومصدر البيانات بعد الاتصال." else "Tracked assets will show price, last update time and data source after connectivity.", accent)
+                card(if (ar) "مركز التنبيهات" else "Alert center",
+                    if (ar) "تنبيهات الاتجاه والحجم والتذبذب، مع بيان حالة كل تنبيه." else "Trend, volume and volatility alerts with explicit alert status.")
+            }
+            "التداول التجريبي" -> {
+                metricRow(listOf("PAPER" to (if (ar) "محاكاة" else "Mode"), ("0.00" to (if (ar) "رصيد تجريبي" else "Demo equity")), ("0" to (if (ar) "صفقات" else "Trades"))), accent)
+                card(if (ar) "لوحة تنفيذ افتراضي" else "Virtual execution",
+                    if (ar) "ستتم محاكاة الدخول والخروج والرسوم والانزلاق دون اتصال بوسيط." else "Entry, exit, fees and slippage will be simulated without broker execution.", accent)
+                card(if (ar) "حماية المستخدم" else "Execution safety",
+                    if (ar) "هذا القسم للتداول التجريبي فقط ولا يرسل أوامر حقيقية." else "Paper trading only. No real orders are sent.", neon)
+            }
+            "مختبر التحليل" -> {
+                card(if (ar) "مختبر الاختبار التاريخي" else "Backtesting lab",
+                    if (ar) "يدعم التصميم احتساب الرسوم والسبريد والانزلاق وفصل بيانات التدريب عن الاختبار." else "Designed to include fees, spread, slippage and separate training from test data.", accent)
+                card(if (ar) "مقاييس التقييم" else "Evaluation metrics",
+                    if (ar) "العائد، التراجع الأقصى، عدد الصفقات، متوسط الربح والخسارة، وثبات الأداء خارج العينة." else "Return, maximum drawdown, trade count, average win/loss and out-of-sample stability.")
+            }
+            "إدارة المخاطر" -> {
+                metricRow(listOf("RISK" to (if (ar) "مخاطرة" else "Risk"), "STOP" to (if (ar) "وقف" else "Stop"), "CAP" to (if (ar) "تعرض" else "Exposure")), accent)
+                card(if (ar) "حاسبة حجم المركز" else "Position sizing",
+                    if (ar) "تحسب الحجم من رأس المال ونسبة المخاطرة وسعر الدخول والوقف، مع حد أقصى للتعرض." else "Calculates size from equity, risk fraction, entry and stop, with a maximum exposure cap.", accent)
+                card(if (ar) "فحوص ما قبل الصفقة" else "Pre-trade checks",
+                    if (ar) "رفض الاتجاه المحايد أو الوقف غير الصحيح أو تجاوز حدود المخاطر." else "Rejects neutral direction, invalid stops and risk-limit breaches.", neon)
+            }
             else -> {
-                card(if (ar) "الإعدادات" else "Settings",
-                    if (ar) "المظهر واللغة وإعدادات التنبيه ومعلومات مصدر البيانات." else "Theme, language, alert preferences and data source information.")
-                card(if (ar) "الخصوصية" else "Privacy",
-                    if (ar) "لا تضع مفاتيح API أو كلمات المرور داخل التطبيق أو المستودع." else "Never place API keys or passwords in the app or repository.")
+                card(if (ar) "التخصيص" else "Preferences",
+                    if (ar) "المظهر الليلي والنهاري واللغة العربية والإنجليزية." else "Dark/light appearance and Arabic/English language.")
+                card(if (ar) "مصادر البيانات والخصوصية" else "Data & privacy",
+                    if (ar) "اعرض المصدر والطابع الزمني وحالة الاتصال. لا تخزن مفاتيح API داخل التطبيق." else "Show provider, timestamp and connection status. Never store API keys in the app.")
+                card(if (ar) "التنبيهات" else "Notifications",
+                    if (ar) "تفضيلات تنبيهات الأسعار وجودة البيانات وحالة النظام." else "Configure price, data-quality and system alerts.")
             }
         }
-        card(if (ar) "تنبيه" else "Notice",
-            if (ar) "هذا الإصدار قيد التطوير. لا توجد توصيات مالية أو ضمانات ربح." else "This build is under development. No financial advice or profit guarantees.", mutedText)
+        card(if (ar) "ملاحظة تطوير" else "Development notice",
+            if (ar) "البيانات الحية غير متاحة حتى ربط مزود موثوق. لا توجد توصيات مالية أو ضمانات ربح." else "Live data remains unavailable until a trusted provider is connected. No financial advice or profit guarantees.", mutedText)
     }
 
     companion object {
