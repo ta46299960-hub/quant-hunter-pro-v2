@@ -8,7 +8,7 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.quanthunter.pro"
+        applicationId = "com.quanthunter.pro.v2"
         minSdk = 23
         targetSdk = 35
         versionCode = 1
