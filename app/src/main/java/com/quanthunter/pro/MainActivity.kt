@@ -590,11 +590,24 @@ class MainActivity : Activity() {
                     background = rounded(panelBg, Color.rgb(80, 86, 94))
                 }
                 content.addView(symbolField, LinearLayout.LayoutParams(-1, -2))
+                if (watchSymbols.isNotEmpty()) {
+                    card(if (ar) "الأصول المحفوظة — اضغط للحذف" else "Saved assets — tap to remove",
+                        watchSymbols.joinToString("  •  "), accent)
+                    val removeRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+                    watchSymbols.forEach { savedSymbol ->
+                        removeRow.addView(chip("× $savedSymbol", false) {
+                            val updated = watchSymbols.toMutableSet().apply { remove(savedSymbol) }
+                            preferences.edit().putStringSet("watchlist_symbols", updated).apply()
+                            showSection(section)
+                        })
+                    }
+                    content.addView(removeRow)
+                }
                 content.addView(chip(if (ar) "إضافة إلى القائمة" else "Add to watchlist", false) {
                     val symbol = symbolField.text.toString().trim().uppercase(Locale.US)
                     val current = preferences.getStringSet("watchlist_symbols", setOf("BTCUSDT", "ETHUSDT", "BNBUSDT"))
                         ?.toMutableSet() ?: mutableSetOf("BTCUSDT")
-                    if (!symbol.matches(Regex("[A-Z0-9]{3,20}")) || (symbol !in current && current.size >= 8)) {
+                    if (!symbol.matches(Regex("[A-Z0-9]{5,20}")) || (symbol !in current && current.size >= 8)) {
                         scannerStatusView?.text = if (ar) "رمز غير صالح أو وصلت القائمة إلى 8 أصول." else "Invalid symbol or the 8-asset limit has been reached."
                     } else {
                         current.add(symbol)
@@ -609,7 +622,7 @@ class MainActivity : Activity() {
                     if (ar) "التغير محسوب من آخر 25 شمعة ساعة المتاحة (24 فترة تقريباً)، وليس تغير يوم تقويمي مضموناً." else "Change is measured across up to 25 hourly candles (about 24 intervals), not a guaranteed calendar-day return.")
             }
             "التداول التجريبي" -> {
-                metricRow(listOf("PAPER" to (if (ar) "محاكاة" else "Mode"), ("0.00" to (if (ar) "رصيد تجريبي" else "Demo equity")), ("0" to (if (ar) "صفقات" else "Trades"))), accent)
+                metricRow(listOf("PAPER" to (if (ar) "وضع محاكاة" else "Mode"), "0.10%" to (if (ar) "رسوم مفترضة" else "Assumed fee"), "0.05%" to (if (ar) "انزلاق مفترض" else "Assumed slippage")), accent)
                 card(if (ar) "حاسبة الصفقة التجريبية" else "Paper trade calculator",
                     if (ar) "أدخل الكمية وسعر الدخول والخروج. تُخصم رسوم التنفيذ والانزلاق التقديري من النتيجة." else "Enter quantity, entry and exit prices. Estimated fees and slippage are deducted.", accent)
                 val sideRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
