@@ -472,7 +472,7 @@ class MainActivity : Activity() {
                 sideRow.addView(chip(if (ar) "شراء / صعود" else "LONG", riskDirection == Direction.BULLISH) { riskDirection = Direction.BULLISH; showSection(section) })
                 sideRow.addView(chip(if (ar) "بيع / هبوط" else "SHORT", riskDirection == Direction.BEARISH) { riskDirection = Direction.BEARISH; showSection(section) })
                 content.addView(sideRow)
-                fun riskField(hintText: String): EditText = EditText(this).apply {
+                fun numericRiskField(hintText: String): EditText = EditText(this).apply {
                     hint = hintText
                     inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
                     setTextColor(primaryText)
@@ -485,10 +485,10 @@ class MainActivity : Activity() {
                     p.setMargins(0, 5, 0, 5)
                     content.addView(this, p)
                 }
-                val equityField = riskField(if (ar) "رأس المال (مثال: 1000)" else "Account equity (e.g. 1000)")
-                val riskField = riskField(if (ar) "نسبة المخاطرة % (0.1 إلى 5)" else "Risk percent (0.1 to 5)")
-                val entryField = riskField(if (ar) "سعر الدخول" else "Entry price")
-                val stopField = riskField(if (ar) "سعر وقف الخسارة" else "Stop price")
+                val equityField = numericRiskField(if (ar) "رأس المال (مثال: 1000)" else "Account equity (e.g. 1000)")
+                val riskPercentField = numericRiskField(if (ar) "نسبة المخاطرة % (0.1 إلى 5)" else "Risk percent (0.1 to 5)")
+                val entryField = numericRiskField(if (ar) "سعر الدخول" else "Entry price")
+                val stopField = numericRiskField(if (ar) "سعر وقف الخسارة" else "Stop price")
                 statusCard(if (ar) "نتيجة إدارة المخاطر" else "Risk calculation",
                     if (ar) "أدخل القيم واحسب حجم المركز." else "Enter values and calculate position size.", mutedText)
                 content.addView(chip(if (ar) "احسب حجم المركز" else "Calculate position size", false) {
@@ -496,7 +496,7 @@ class MainActivity : Activity() {
                         RiskCalculator().calculate(
                             RiskRequest(
                                 accountEquity = equityField.text.toString().toDouble(),
-                                riskPercent = riskField.text.toString().toDouble(),
+                                riskPercent = riskPercentField.text.toString().toDouble(),
                                 entryPrice = entryField.text.toString().toDouble(),
                                 stopPrice = stopField.text.toString().toDouble(),
                                 direction = riskDirection
