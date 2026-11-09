@@ -39,12 +39,15 @@ class MultiTimeframeEngine {
             else (alignedWeight / directionalWeight * 100.0).toInt()
         val confidence = if (direction == Direction.NEUTRAL) 0
             else (agreement * 0.7 + kotlin.math.abs(score) * 0.3).toInt().coerceIn(0, 90)
+        val hasConflict = directional.any { it.score > 0 } && directional.any { it.score < 0 }
         val reasons = buildList {
             add("Combined ${signals.size} timeframe(s) using supplied weights")
             add("Weighted score: $score")
             add("Directional alignment: $agreement%")
             if (direction == Direction.NEUTRAL) add("No clear multi-timeframe direction")
-            if (agreement < 60 && direction != Direction.NEUTRAL) add("Timeframes conflict: treat signal cautiously")
+            if (hasConflict || (agreement < 60 && direction != Direction.NEUTRAL)) {
+                add("Timeframes conflict: treat signal cautiously")
+            }
             add("Confidence is evidence alignment, not probability of profit")
         }
         return MultiTimeframeAssessment(score, direction, agreement, confidence, signals.size, reasons)
