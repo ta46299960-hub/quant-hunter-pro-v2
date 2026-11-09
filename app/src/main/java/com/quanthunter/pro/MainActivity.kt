@@ -146,7 +146,8 @@ class MainActivity : Activity() {
         setContentView(root)
         renderContent(section)
         if (section == "ماسح الأسواق") loadCryptoSnapshot()
-        if (section == "صائد الفرص") loadCryptoOpportunity()\n        if (section == "غرفة المراقبة") loadWatchlist()
+        if (section == "صائد الفرص") loadCryptoOpportunity()
+        if (section == "غرفة المراقبة") loadWatchlist()
     }
 
     private fun sectionTitle(key: String): String {
