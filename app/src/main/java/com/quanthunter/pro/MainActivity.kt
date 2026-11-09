@@ -8,6 +8,8 @@ import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
 import android.widget.HorizontalScrollView
+import android.widget.EditText
+import android.text.InputType
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -17,6 +19,9 @@ import com.quanthunter.pro.data.CandleRequest
 import com.quanthunter.pro.data.DataQualityValidator
 import com.quanthunter.pro.engine.MarketType
 import com.quanthunter.pro.engine.CryptoOpportunityAnalyzer
+import com.quanthunter.pro.engine.Direction
+import com.quanthunter.pro.paper.PaperTradeCalculator
+import com.quanthunter.pro.paper.PaperTradeRequest
 import java.util.Locale
 
 class MainActivity : Activity() {
@@ -29,6 +34,7 @@ class MainActivity : Activity() {
     private var scannerStatusView: TextView? = null
     private var activeSection = sections.first()
     private var scanRequestId = 0
+    private var paperDirection = Direction.BULLISH
 
     private val screenBg: Int get() = if (lightTheme) Color.rgb(239, 242, 246) else Color.rgb(13, 16, 20)
     private val panelBg: Int get() = if (lightTheme) Color.WHITE else Color.rgb(25, 30, 36)
@@ -396,10 +402,58 @@ class MainActivity : Activity() {
             }
             "التداول التجريبي" -> {
                 metricRow(listOf("PAPER" to (if (ar) "محاكاة" else "Mode"), ("0.00" to (if (ar) "رصيد تجريبي" else "Demo equity")), ("0" to (if (ar) "صفقات" else "Trades"))), accent)
-                card(if (ar) "لوحة تنفيذ افتراضي" else "Virtual execution",
-                    if (ar) "ستتم محاكاة الدخول والخروج والرسوم والانزلاق دون اتصال بوسيط." else "Entry, exit, fees and slippage will be simulated without broker execution.", accent)
-                card(if (ar) "حماية المستخدم" else "Execution safety",
-                    if (ar) "هذا القسم للتداول التجريبي فقط ولا يرسل أوامر حقيقية." else "Paper trading only. No real orders are sent.", neon)
+                card(if (ar) "حاسبة الصفقة التجريبية" else "Paper trade calculator",
+                    if (ar) "أدخل الكمية وسعر الدخول والخروج. تُخصم رسوم التنفيذ والانزلاق التقديري من النتيجة." else "Enter quantity, entry and exit prices. Estimated fees and slippage are deducted.", accent)
+                val sideRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+                sideRow.addView(chip(if (ar) "شراء / صعود" else "LONG", paperDirection == Direction.BULLISH) { paperDirection = Direction.BULLISH; showSection(section) })
+                sideRow.addView(chip(if (ar) "بيع / هبوط" else "SHORT", paperDirection == Direction.BEARISH) { paperDirection = Direction.BEARISH; showSection(section) })
+                content.addView(sideRow)
+                fun numberField(hintText: String): EditText = EditText(this).apply {
+                    hint = hintText
+                    inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
+                    setTextColor(primaryText)
+                    setHintTextColor(mutedText)
+                    textSize = 14f
+                    setSingleLine(true)
+                    setPadding(16, 8, 16, 8)
+                    background = rounded(panelBg, Color.rgb(80, 86, 94))
+                    val p = LinearLayout.LayoutParams(-1, -2)
+                    p.setMargins(0, 5, 0, 5)
+                    content.addView(this, p)
+                }
+                val quantityField = numberField(if (ar) "الكمية (مثال: 0.01)" else "Quantity (e.g. 0.01)")
+                val entryField = numberField(if (ar) "سعر الدخول" else "Entry price")
+                val exitField = numberField(if (ar) "سعر الخروج" else "Exit price")
+                statusCard(if (ar) "نتيجة المحاكاة" else "Simulation result",
+                    if (ar) "أدخل القيم ثم احسب النتيجة." else "Enter values and calculate.", mutedText)
+                content.addView(chip(if (ar) "احسب الصفقة" else "Calculate trade", false) {
+                    val result = try {
+                        PaperTradeCalculator().calculate(
+                            PaperTradeRequest(
+                                direction = paperDirection,
+                                quantity = quantityField.text.toString().toDouble(),
+                                entryPrice = entryField.text.toString().toDouble(),
+                                exitPrice = exitField.text.toString().toDouble(),
+                                feePercent = 0.1,
+                                slippagePercent = 0.05
+                            )
+                        )
+                    } catch (e: Exception) {
+                        scannerStatusView?.text = if (ar) "تحقق من إدخال كمية وأسعار صحيحة وموجبة." else "Enter valid positive quantity and prices."
+                        null
+                    }
+                    if (result != null) {
+                        scannerStatusView?.text = String.format(
+                            Locale.US,
+                            if (ar) "سعر الدخول المنفذ: %.4f | الخروج المنفذ: %.4f | الربح قبل التكاليف: %.4f | الرسوم: %.4f | النتيجة الصافية: %.4f (%.3f%%)"
+                            else "Entry fill: %.4f | Exit fill: %.4f | Gross PnL: %.4f | Fees: %.4f | Net PnL: %.4f (%.3f%%)",
+                            result.entryFillPrice, result.exitFillPrice, result.grossPnl,
+                            result.fees, result.netPnl, result.returnOnEntryPercent
+                        )
+                    }
+                })
+                card(if (ar) "افتراضات المحاكاة" else "Simulation assumptions",
+                    if (ar) "رسوم تقديرية 0.10% لكل جانب وانزلاق 0.05% لكل تنفيذ. لا يتصل هذا القسم بوسيط." else "Assumed 0.10% fee per side and 0.05% slippage per execution. No broker connection.", neon)
             }
             "مختبر التحليل" -> {
                 card(if (ar) "مختبر الاختبار التاريخي" else "Backtesting lab",
