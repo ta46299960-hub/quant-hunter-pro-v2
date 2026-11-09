@@ -10,6 +10,12 @@ import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import com.quanthunter.pro.data.BinanceSpotProvider
+import com.quanthunter.pro.data.CandleInterval
+import com.quanthunter.pro.data.CandleRequest
+import com.quanthunter.pro.data.DataQualityValidator
+import com.quanthunter.pro.engine.MarketType
+import java.util.Locale
 
 class MainActivity : Activity() {
     private val gold = Color.rgb(245, 190, 65)
@@ -18,6 +24,7 @@ class MainActivity : Activity() {
     private var english = false
     private var selectedDepth = "AUTO"
     private lateinit var content: LinearLayout
+    private var scannerStatusView: TextView? = null
     private var activeSection = sections.first()
 
     private val screenBg: Int get() = if (lightTheme) Color.rgb(239, 242, 246) else Color.rgb(13, 16, 20)
@@ -106,6 +113,7 @@ class MainActivity : Activity() {
         root.addView(bodyScroll, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
         renderContent(section)
+        if (section == "ماسح الأسواق") loadCryptoSnapshot()
     }
 
     private fun sectionTitle(key: String): String {
@@ -147,6 +155,56 @@ class MainActivity : Activity() {
         val p = LinearLayout.LayoutParams(-1, -2)
         p.setMargins(0, 6, 0, 12)
         content.addView(panel, p)
+    }
+
+    private fun statusCard(title: String, detail: String, accent: Int) {
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = rounded(panelBg, accent)
+            setPadding(8, 8, 8, 8)
+        }
+        box.addView(label(title, 16f, accent, true))
+        scannerStatusView = label(detail, 13f, primaryText)
+        box.addView(scannerStatusView)
+        val params = LinearLayout.LayoutParams(-1, -2)
+        params.setMargins(0, 7, 0, 7)
+        content.addView(box, params)
+    }
+
+    /** Fetch a small public BTC/USDT sample off the UI thread and gate it before display. */
+    private fun loadCryptoSnapshot() {
+        val ar = !english
+        scannerStatusView?.text = if (ar) "جارٍ الاتصال بمصدر Binance العام..." else "Connecting to public Binance data..."
+        Thread {
+            val envelope = BinanceSpotProvider().fetchCandles(
+                CandleRequest(
+                    symbol = "BTCUSDT",
+                    market = MarketType.CRYPTO,
+                    interval = CandleInterval.H1,
+                    limit = when (selectedDepth) {
+                        "32" -> 32
+                        "64" -> 64
+                        "128" -> 128
+                        "256" -> 256
+                        else -> 128
+                    }
+                )
+            )
+            val report = envelope.data?.let {
+                DataQualityValidator().validate(it, CandleInterval.H1, System.currentTimeMillis())
+            }
+            val message = when {
+                !envelope.isSuccessful -> (if (ar) "تعذر جلب البيانات: " else "Data request failed: ") + (envelope.error ?: "Unknown error")
+                report == null || !report.isUsable -> (if (ar) "البيانات مرفوضة بسبب الجودة أو الحداثة. " else "Data rejected by freshness/quality gate. ") + (report?.warnings?.joinToString() ?: "")
+                else -> {
+                    val last = report.acceptedCandles.last()
+                    val price = String.format(Locale.US, "%.2f", last.close)
+                    if (ar) "BTC/USDT: $price USDT | جودة: ${report.qualityScore}/100 | المصدر: ${envelope.source} | وقت الجلب: ${envelope.fetchedAtEpochMillis}"
+                    else "BTC/USDT: $price USDT | Quality: ${report.qualityScore}/100 | Source: ${envelope.source} | Fetched: ${envelope.fetchedAtEpochMillis}"
+                }
+            }
+            runOnUiThread { scannerStatusView?.text = message }
+        }.start()
     }
 
     private fun metricRow(items: List<Pair<String, String>>, accent: Int) {
@@ -226,8 +284,8 @@ class MainActivity : Activity() {
                     else -> if (ar) "تلقائي ذكي — يحدد العمق وفق موارد الجهاز وجودة البيانات." else "Smart auto — selects depth from device capacity and data quality."
                 }
                 card((if (ar) "الاختيار الحالي: " else "Current selection: ") + selectedDepth, desc, neon)
-                card(if (ar) "حالة مصدر البيانات" else "Data source status",
-                    if (ar) "بانتظار ربط مزود حقيقي. لن يتم اختلاق أسعار أو نتائج مباشرة." else "Awaiting a live provider. No prices or live results are fabricated.", mutedText)
+                statusCard(if (ar) "بيانات BTC/USDT من مصدر عام" else "BTC/USDT public market data",
+                    if (ar) "سيتم فحص المصدر والحداثة وجودة الشموع قبل عرض السعر." else "Provider, freshness and candle quality are checked before displaying a price.", mutedText)
             }
             "صائد الفرص" -> {
                 metricRow(listOf("TREND" to (if (ar) "اتجاه" else "Trend"), "MOM" to (if (ar) "زخم" else "Momentum"), "MTF" to (if (ar) "أطر" else "Frames")), neon)
