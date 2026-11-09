@@ -145,9 +145,15 @@ class MainActivity : Activity() {
         root.addView(bodyScroll, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
         renderContent(section)
-        if (section == "ماسح الأسواق") loadCryptoSnapshot()
-        if (section == "صائد الفرص") loadCryptoOpportunity()
-        if (section == "غرفة المراقبة") loadWatchlist()
+        if (section == "ماسح الأسواق") {
+            loadCryptoSnapshot()
+        }
+        if (section == "صائد الفرص") {
+            loadCryptoOpportunity()
+        }
+        if (section == "غرفة المراقبة") {
+            loadWatchlist()
+        }
     }
 
     private fun sectionTitle(key: String): String {
