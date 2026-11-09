@@ -29,6 +29,18 @@ class DataQualityValidatorTest {
         assertEquals(1, result.acceptedCandles.size)
     }
 
+    @Test fun validCandleSurvivesMalformedDuplicateTimestamp() {
+        val malformed = Candle(now - 60_000, 9.0, 8.0, 7.0, 9.0, 1.0)
+        val valid = candle(now - 60_000)
+        val result = validator.validate(
+            listOf(malformed, valid, candle(now - 120_000)),
+            CandleInterval.M1, now
+        )
+        assertEquals(1, result.rejectedCount)
+        assertEquals(1, result.duplicateCount)
+        assertTrue(result.acceptedCandles.any { it.timestampEpochMillis == now - 60_000 })
+    }
+
     @Test fun marksOldDataAsStale() {
         val result = validator.validate(listOf(candle(now - 600_000), candle(now - 540_000)), CandleInterval.M1, now)
         assertFalse(result.isFresh)
