@@ -33,7 +33,7 @@ class DataQualityValidatorTest {
         val malformed = Candle(now - 60_000, 9.0, 8.0, 7.0, 9.0, 1.0)
         val valid = candle(now - 60_000)
         val result = validator.validate(
-            listOf(malformed, valid, candle(now - 120_000)),
+            listOf(malformed, valid, valid, candle(now - 120_000)),
             CandleInterval.M1, now
         )
         assertEquals(1, result.rejectedCount)
