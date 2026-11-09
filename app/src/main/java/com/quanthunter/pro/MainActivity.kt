@@ -342,7 +342,7 @@ class MainActivity : Activity() {
             } catch (e: Exception) {
                 lines += (if (ar) "تعذر تحديث القائمة: " else "Watchlist refresh failed: ") + (e.message ?: "Unexpected error")
             }
-            val resultText = lines.joinToString("\\n")
+            val resultText = lines.joinToString("\n")
             runOnUiThread {
                 if (requestId == scanRequestId && activeSection == "غرفة المراقبة" && !isFinishing) {
                     scannerStatusView?.text = resultText
