@@ -35,9 +35,23 @@ class MainActivity : Activity() {
     private val primaryText: Int get() = if (lightTheme) Color.rgb(28, 33, 40) else Color.LTGRAY
     private val mutedText: Int get() = if (lightTheme) Color.rgb(90, 98, 108) else Color.rgb(170, 178, 188)
 
+    private val preferences by lazy { getSharedPreferences("qh_preferences", MODE_PRIVATE) }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        lightTheme = preferences.getBoolean("light_theme", false)
+        english = preferences.getBoolean("english_language", false)
+        selectedDepth = preferences.getString("scan_depth", "AUTO") ?: "AUTO"
+        if (selectedDepth !in listOf("32", "64", "128", "256", "AUTO")) selectedDepth = "AUTO"
         showSection(activeSection)
+    }
+
+    private fun savePreferences() {
+        preferences.edit()
+            .putBoolean("light_theme", lightTheme)
+            .putBoolean("english_language", english)
+            .putString("scan_depth", selectedDepth)
+            .apply()
     }
 
     private fun label(value: String, size: Float, color: Int, bold: Boolean = false): TextView =
@@ -83,10 +97,12 @@ class MainActivity : Activity() {
         header.addView(branding, LinearLayout.LayoutParams(0, -2, 1f))
         header.addView(chip(if (lightTheme) "☾" else "☀", false) {
             lightTheme = !lightTheme
+            savePreferences()
             showSection(activeSection)
         })
         header.addView(chip(if (english) "AR" else "EN", false) {
             english = !english
+            savePreferences()
             showSection(activeSection)
         })
         root.addView(header)
@@ -346,7 +362,7 @@ class MainActivity : Activity() {
                 val depthRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
                 listOf("32", "64", "128", "256", "AUTO").forEach { depth ->
                     val caption = if (depth == "AUTO" && ar) "تلقائي" else depth
-                    val item = chip(caption, selectedDepth == depth) { selectedDepth = depth; showSection(section) }
+                    val item = chip(caption, selectedDepth == depth) { selectedDepth = depth; savePreferences(); showSection(section) }
                     val p = LinearLayout.LayoutParams(0, -2, 1f); p.setMargins(2, 4, 2, 4); depthRow.addView(item, p)
                 }
                 content.addView(depthRow)
