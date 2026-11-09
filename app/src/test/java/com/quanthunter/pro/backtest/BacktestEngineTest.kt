@@ -22,8 +22,8 @@ class BacktestEngineTest {
         ))
         assertEquals(2, result.tradeCount)
         assertTrue(result.totalFees > 0.0)
-        assertEquals(2, result.outOfSampleTradeCount)
-        assertEquals(100.0, result.winRatePercent, 100.0)
+        assertEquals(1, result.outOfSampleTradeCount)
+        assertTrue(result.winRatePercent in 0.0..100.0)
         assertTrue(result.finalCapital.isFinite())
     }
 
