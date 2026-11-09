@@ -20,6 +20,9 @@ import com.quanthunter.pro.data.DataQualityValidator
 import com.quanthunter.pro.engine.MarketType
 import com.quanthunter.pro.engine.CryptoOpportunityAnalyzer
 import com.quanthunter.pro.engine.Direction
+import com.quanthunter.pro.backtest.BacktestBar
+import com.quanthunter.pro.backtest.BacktestEngine
+import com.quanthunter.pro.backtest.BacktestRequest
 import com.quanthunter.pro.paper.PaperTradeCalculator
 import com.quanthunter.pro.paper.PaperTradeRequest
 import com.quanthunter.pro.risk.RiskCalculator
@@ -302,6 +305,83 @@ class MainActivity : Activity() {
         }, "QH-Market-Scanner").apply { isDaemon = true; start() }
     }
 
+
+    /** Run a transparent EMA-cross research backtest on validated public BTC/USDT candles. */
+    private fun loadHistoricalBacktest() {
+        val ar = !english
+        val requestId = ++scanRequestId
+        val depth = maxOf(resolvedDepth(), 64)
+        scannerStatusView?.text = if (ar) "جارٍ جلب شموع BTC/USDT التاريخية وفحص جودتها..." else "Fetching and validating historical BTC/USDT candles..."
+        Thread({
+            val message = try {
+                val envelope = BinanceSpotProvider().fetchCandles(
+                    CandleRequest("BTCUSDT", MarketType.CRYPTO, CandleInterval.H1, depth)
+                )
+                val raw = envelope.data
+                if (!envelope.isSuccessful || !envelope.isLive || raw == null) {
+                    (if (ar) "تعذر الاختبار: " else "Backtest unavailable: ") + (envelope.error ?: "Live historical data unavailable")
+                } else {
+                    val report = DataQualityValidator().validate(raw, CandleInterval.H1, System.currentTimeMillis())
+                    val candles = report.acceptedCandles
+                    if (!report.isUsable || candles.size < 40) {
+                        if (ar) "تم رفض البيانات: الجودة أو الحداثة غير كافية لإجراء اختبار موثوق."
+                        else "Data rejected: insufficient freshness or quality for a meaningful test."
+                    } else {
+                        val bars = candles.mapIndexed { index, candle ->
+                            val priorCloses = candles.take(index).map { it.close }
+                            val signal = if (priorCloses.size < 21) Direction.NEUTRAL else {
+                                val fast = emaValue(priorCloses.takeLast(9))
+                                val slow = emaValue(priorCloses.takeLast(21))
+                                when {
+                                    fast > slow * 1.0005 -> Direction.BULLISH
+                                    fast < slow * 0.9995 -> Direction.BEARISH
+                                    else -> Direction.NEUTRAL
+                                }
+                            }
+                            BacktestBar(candle.timestampEpochMillis, candle.open, candle.close, signal)
+                        }
+                        val split = (bars.size * 0.7).toInt().coerceIn(1, bars.lastIndex)
+                        val result = BacktestEngine().run(
+                            BacktestRequest(
+                                bars = bars,
+                                initialCapital = 10_000.0,
+                                positionFraction = 0.25,
+                                feePercentPerSide = 0.1,
+                                spreadPercentRoundTrip = 0.02,
+                                slippagePercentPerSide = 0.05,
+                                outOfSampleStartIndex = split
+                            )
+                        )
+                        if (ar) String.format(
+                            Locale.US,
+                            "BTC/USDT • إطار 1h • شموع صالحة: %d • صفقات: %d • صافي العائد: %.2f%% • التراجع الأقصى: %.2f%% • نسبة الصفقات الرابحة: %.1f%% • رسوم: %.2f • اختبار خارج العينة: %d صفقة / صافي %.2f. نموذج EMA تجريبي، وليس توقعاً للمستقبل.",
+                            candles.size, result.tradeCount, result.netReturnPercent, result.maxDrawdownPercent,
+                            result.winRatePercent, result.totalFees, result.outOfSampleTradeCount, result.outOfSampleNetPnl
+                        ) else String.format(
+                            Locale.US,
+                            "BTC/USDT • 1h • Valid candles: %d • Trades: %d • Net return: %.2f%% • Max drawdown: %.2f%% • Win rate: %.1f%% • Fees: %.2f • Out-of-sample: %d trades / net %.2f. Experimental EMA model; not a forecast.",
+                            candles.size, result.tradeCount, result.netReturnPercent, result.maxDrawdownPercent,
+                            result.winRatePercent, result.totalFees, result.outOfSampleTradeCount, result.outOfSampleNetPnl
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                (if (ar) "فشل الاختبار التاريخي: " else "Backtest failed: ") + (e.message ?: "Unexpected error")
+            }
+            runOnUiThread {
+                if (requestId == scanRequestId && activeSection == "مختبر التحليل" && !isFinishing) scannerStatusView?.text = message
+            }
+        }, "QH-Historical-Backtest").apply { isDaemon = true; start() }
+    }
+
+    private fun emaValue(values: List<Double>): Double {
+        if (values.isEmpty()) return 0.0
+        val alpha = 2.0 / (values.size + 1.0)
+        return values.drop(1).fold(values.first()) { current, value ->
+            alpha * value + (1.0 - alpha) * current
+        }
+    }
+
     override fun onDestroy() {
         scanRequestId++
         super.onDestroy()
@@ -459,10 +539,13 @@ class MainActivity : Activity() {
                     if (ar) "رسوم تقديرية 0.10% لكل جانب وانزلاق 0.05% لكل تنفيذ. لا يتصل هذا القسم بوسيط." else "Assumed 0.10% fee per side and 0.05% slippage per execution. No broker connection.", neon)
             }
             "مختبر التحليل" -> {
-                card(if (ar) "مختبر الاختبار التاريخي" else "Backtesting lab",
-                    if (ar) "يدعم التصميم احتساب الرسوم والسبريد والانزلاق وفصل بيانات التدريب عن الاختبار." else "Designed to include fees, spread, slippage and separate training from test data.", accent)
-                card(if (ar) "مقاييس التقييم" else "Evaluation metrics",
-                    if (ar) "العائد، التراجع الأقصى، عدد الصفقات، متوسط الربح والخسارة، وثبات الأداء خارج العينة." else "Return, maximum drawdown, trade count, average win/loss and out-of-sample stability.")
+                card(if (ar) "اختبار تاريخي مباشر لبيانات BTC/USDT" else "Historical backtest on BTC/USDT data",
+                    if (ar) "يجلب شموع 1h من Binance، ويرفض البيانات غير الصالحة، ثم يختبر تقاطع EMA مع رسوم وسبريد وانزلاق. تقسيم زمني 70% / 30%." else "Fetches Binance 1h candles, rejects invalid data, then tests an EMA crossover with fees, spread and slippage. Chronological 70% / 30% split.", accent)
+                statusCard(if (ar) "نتيجة الاختبار" else "Backtest result",
+                    if (ar) "اضغط تشغيل الاختبار لجلب البيانات وحساب النتائج." else "Run the test to fetch data and calculate results.", mutedText)
+                content.addView(chip(if (ar) "تشغيل الاختبار التاريخي" else "Run historical backtest", false) { loadHistoricalBacktest() })
+                card(if (ar) "تنبيه منهجي" else "Research note",
+                    if (ar) "النموذج تقاطع متوسطات بسيط، والاختبار التاريخي لا يضمن أداءً مستقبلياً. نتيجة خارج العينة تُعرض منفصلة." else "This is a simple moving-average crossover; historical results do not guarantee future performance. Out-of-sample results are reported separately.")
             }
             "إدارة المخاطر" -> {
                 metricRow(listOf("RISK" to (if (ar) "مخاطرة" else "Risk"), "STOP" to (if (ar) "وقف" else "Stop"), "CAP" to (if (ar) "تعرض" else "Exposure")), accent)
