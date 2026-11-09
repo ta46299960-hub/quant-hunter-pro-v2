@@ -16,6 +16,7 @@ import com.quanthunter.pro.data.CandleInterval
 import com.quanthunter.pro.data.CandleRequest
 import com.quanthunter.pro.data.DataQualityValidator
 import com.quanthunter.pro.engine.MarketType
+import com.quanthunter.pro.engine.CryptoOpportunityAnalyzer
 import java.util.Locale
 
 class MainActivity : Activity() {
@@ -117,6 +118,7 @@ class MainActivity : Activity() {
         setContentView(root)
         renderContent(section)
         if (section == "ماسح الأسواق") loadCryptoSnapshot()
+        if (section == "صائد الفرص") loadCryptoOpportunity()
     }
 
     private fun sectionTitle(key: String): String {
@@ -186,6 +188,54 @@ class MainActivity : Activity() {
             memoryMb >= 192 && cores >= 2 -> 64
             else -> 32
         }
+    }
+
+    /** Analyze BTC/USDT only after three independently fetched and validated timeframes. */
+    private fun loadCryptoOpportunity() {
+        val ar = !english
+        val requestId = ++scanRequestId
+        val depth = resolvedDepth()
+        scannerStatusView?.text = if (ar) "جارٍ جمع بيانات 15m و1h و4h..." else "Fetching 15m, 1h and 4h market data..."
+        Thread({
+            val message = try {
+                val provider = BinanceSpotProvider()
+                val candles = linkedMapOf<CandleInterval, List<com.quanthunter.pro.data.Candle>>()
+                val intervals = listOf(CandleInterval.M15, CandleInterval.H1, CandleInterval.H4)
+                var failure: String? = null
+                for (interval in intervals) {
+                    val envelope = provider.fetchCandles(CandleRequest("BTCUSDT", MarketType.CRYPTO, interval, depth))
+                    if (!envelope.isSuccessful || !envelope.isLive || envelope.data == null) {
+                        failure = "${interval.name}: ${envelope.error ?: "Live provider data unavailable"}"
+                        break
+                    }
+                    candles[interval] = envelope.data
+                }
+                if (failure != null) {
+                    (if (ar) "تعذر إصدار تقييم: " else "Assessment unavailable: ") + failure
+                } else {
+                    val assessment = CryptoOpportunityAnalyzer().assess("BTCUSDT", candles, System.currentTimeMillis())
+                    if (assessment == null) {
+                        if (ar) "الأدلة غير كافية: نحتاج 32 شمعة صالحة وحديثة على كل إطار 15m و1h و4h."
+                        else "Insufficient evidence: at least 32 valid, fresh candles are required on 15m, 1h and 4h."
+                    } else {
+                        val direction = when (assessment.direction) {
+                            com.quanthunter.pro.engine.Direction.BULLISH -> if (ar) "صاعد" else "BULLISH"
+                            com.quanthunter.pro.engine.Direction.BEARISH -> if (ar) "هابط" else "BEARISH"
+                            com.quanthunter.pro.engine.Direction.NEUTRAL -> if (ar) "محايد — لا توجد فرصة مؤكدة" else "NEUTRAL — no qualified setup"
+                        }
+                        val price = String.format(Locale.US, "%.2f", assessment.lastPrice)
+                        val details = assessment.reasons.takeLast(3).joinToString(" • ")
+                        if (ar) "BTC/USDT: $price USDT | الاتجاه: $direction | الدرجة: ${assessment.score} | توافق الأطر: ${assessment.timeframeAgreement}% | الثقة المنهجية: ${assessment.confidence}/85. $details"
+                        else "BTC/USDT: $price USDT | Direction: $direction | Score: ${assessment.score} | Timeframe agreement: ${assessment.timeframeAgreement}% | Evidence confidence: ${assessment.confidence}/85. $details"
+                    }
+                }
+            } catch (e: Exception) {
+                (if (ar) "فشل التحليل: " else "Analysis failed: ") + (e.message ?: "Unexpected error")
+            }
+            runOnUiThread {
+                if (requestId == scanRequestId && activeSection == "صائد الفرص" && !isFinishing) scannerStatusView?.text = message
+            }
+        }, "QH-Opportunity-Analysis").apply { isDaemon = true; start() }
     }
 
     /** Fetch public BTC/USDT candles off the UI thread and ignore stale screen responses. */
@@ -313,11 +363,14 @@ class MainActivity : Activity() {
                 content.addView(chip(if (ar) "تحديث البيانات الآن" else "Refresh market data", false) { loadCryptoSnapshot() })
             }
             "صائد الفرص" -> {
-                metricRow(listOf("TREND" to (if (ar) "اتجاه" else "Trend"), "MOM" to (if (ar) "زخم" else "Momentum"), "MTF" to (if (ar) "أطر" else "Frames")), neon)
-                card(if (ar) "منهج ترتيب الفرص" else "Opportunity ranking",
-                    if (ar) "يجمع الاتجاه والزخم والسيولة والحجم والتذبذب وتوافق الأطر الزمنية، مع فحص الاختراقات الوهمية." else "Combines trend, momentum, liquidity, volume, volatility and timeframe agreement, including false-breakout checks.", neon)
+                metricRow(listOf("15m" to (if (ar) "قصير" else "Short"), "1h" to (if (ar) "متوسط" else "Medium"), "4h" to (if (ar) "اتجاه عام" else "Higher trend")), neon)
+                card(if (ar) "تحليل BTC/USDT متعدد الأطر" else "BTC/USDT multi-timeframe analysis",
+                    if (ar) "يطلب بيانات مستقلة من Binance على 15 دقيقة وساعة و4 ساعات. لا يصدر اتجاهاً عند نقص البيانات أو تعارض الأطر." else "Fetches independent Binance candles for 15m, 1h and 4h. No directional setup is issued when data is missing or timeframes conflict.", neon)
+                statusCard(if (ar) "نتيجة صائد الفرص" else "Opportunity assessment",
+                    if (ar) "اضغط تحليل الآن لجمع البيانات وفحص حداثتها وجودتها." else "Tap Analyze now to fetch data and validate freshness and quality.", mutedText)
+                content.addView(chip(if (ar) "تحليل الآن" else "Analyze now", false) { loadCryptoOpportunity() })
                 card(if (ar) "تفسير النتيجة" else "Score interpretation",
-                    if (ar) "درجة الثقة تعبر عن توافق الأدلة، وليست احتمالاً للربح." else "Confidence measures evidence agreement, not probability of profit.")
+                    if (ar) "درجة الثقة تعبر عن توافق الأدلة، وليست احتمالاً للربح. التحليل بحثي وليس توصية مالية." else "Confidence measures evidence alignment, not probability of profit. Research only, not financial advice.")
             }
             "غرفة المراقبة" -> {
                 card(if (ar) "قائمة المتابعة" else "Watchlist",
