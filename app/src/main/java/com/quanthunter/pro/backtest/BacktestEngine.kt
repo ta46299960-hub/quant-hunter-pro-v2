@@ -99,7 +99,7 @@ class BacktestEngine {
             capital += net
             trades += BacktestTrade(
                 p.direction, p.entryIndex, index, p.entryFill, exitFill, gross, fees, net,
-                index >= request.outOfSampleStartIndex
+                p.entryIndex >= request.outOfSampleStartIndex
             )
             position = null
         }
