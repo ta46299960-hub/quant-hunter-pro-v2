@@ -2,6 +2,9 @@ package com.quanthunter.pro
 
 import android.app.Activity
 import android.app.ActivityManager
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.graphics.Color
 import android.graphics.Typeface
@@ -27,6 +30,13 @@ import com.quanthunter.pro.paper.PaperTradeCalculator
 import com.quanthunter.pro.paper.PaperTradeRequest
 import com.quanthunter.pro.risk.RiskCalculator
 import com.quanthunter.pro.risk.RiskRequest
+import com.quanthunter.pro.notifications.MarketAlertWorker
+import androidx.work.Constraints
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
+import java.util.concurrent.TimeUnit
 import java.util.Locale
 
 class MainActivity : Activity() {
@@ -41,6 +51,41 @@ class MainActivity : Activity() {
     private var scanRequestId = 0
     private var paperDirection = Direction.BULLISH
     private var riskDirection = Direction.BULLISH
+    private val notificationPermissionRequest = 2201
+
+    private fun enableBackgroundAlerts() {
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), notificationPermissionRequest)
+            return
+        }
+        scheduleBackgroundAlerts()
+    }
+
+    private fun scheduleBackgroundAlerts() {
+        preferences.edit().putBoolean("background_alerts_enabled", true).apply()
+        val constraints = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
+        val request = PeriodicWorkRequestBuilder<MarketAlertWorker>(15, TimeUnit.MINUTES)
+            .setConstraints(constraints)
+            .build()
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            "qh_background_market_alerts", ExistingPeriodicWorkPolicy.UPDATE, request
+        )
+        showSection(activeSection)
+    }
+
+    private fun disableBackgroundAlerts() {
+        preferences.edit().putBoolean("background_alerts_enabled", false).apply()
+        WorkManager.getInstance(this).cancelUniqueWork("qh_background_market_alerts")
+        showSection(activeSection)
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == notificationPermissionRequest) {
+            if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) scheduleBackgroundAlerts()
+            else scannerStatusView?.text = if (english) "Notification permission denied. Background alerts remain off." else "تم رفض إذن الإشعارات؛ التنبيهات الخلفية متوقفة."
+        }
+    }
 
     private val screenBg: Int get() = if (lightTheme) Color.rgb(239, 242, 246) else Color.rgb(13, 16, 20)
     private val panelBg: Int get() = if (lightTheme) Color.WHITE else Color.rgb(25, 30, 36)
@@ -687,8 +732,22 @@ class MainActivity : Activity() {
                     if (ar) "المظهر الليلي والنهاري واللغة العربية والإنجليزية." else "Dark/light appearance and Arabic/English language.")
                 card(if (ar) "مصادر البيانات والخصوصية" else "Data & privacy",
                     if (ar) "اعرض المصدر والطابع الزمني وحالة الاتصال. لا تخزن مفاتيح API داخل التطبيق." else "Show provider, timestamp and connection status. Never store API keys in the app.")
-                card(if (ar) "التنبيهات" else "Notifications",
-                    if (ar) "تفضيلات تنبيهات الأسعار وجودة البيانات وحالة النظام." else "Configure price, data-quality and system alerts.")
+                val alertsEnabled = preferences.getBoolean("background_alerts_enabled", false)
+                statusCard(if (ar) "تنبيهات السوق في الخلفية" else "Background market alerts",
+                    if (alertsEnabled) {
+                        if (ar) "مفعّلة: فحص دوري عند توفر الإنترنت، وتنبيه عند تغير أصل متابع بنسبة 2% أو أكثر بين شمعتين ساعة. قد يؤخر Android التنفيذ." else "Enabled: periodic checks when online; alerts at 2% or larger movement between hourly candles. Android may defer execution."
+                    } else {
+                        if (ar) "متوقفة. يمكن تفعيلها للأصول الموجودة في قائمة المتابعة." else "Off. Enable alerts for assets in your watchlist."
+                    }, if (alertsEnabled) neon else mutedText)
+                content.addView(chip(
+                    if (alertsEnabled) { if (ar) "إيقاف التنبيهات الخلفية" else "Disable background alerts" }
+                    else { if (ar) "تفعيل التنبيهات الخلفية" else "Enable background alerts" },
+                    alertsEnabled
+                ) {
+                    if (alertsEnabled) disableBackgroundAlerts() else enableBackgroundAlerts()
+                })
+                card(if (ar) "حدود التنبيه" else "Alert limits",
+                    if (ar) "التنبيهات للعملات الرقمية المتاحة على Binance Spot فقط. الفحص الدوري كل 15 دقيقة كحد أدنى وقد يتأخر حسب قيود النظام والاتصال. لا توجد تنبيهات للفوركس أو الأسهم أو السلع." else "Alerts cover Binance Spot crypto only. Work is scheduled every 15 minutes minimum and may be delayed by Android and connectivity. No forex, stock or commodity alerts.")
             }
         }
         card(if (ar) "ملاحظة تطوير" else "Development notice",
