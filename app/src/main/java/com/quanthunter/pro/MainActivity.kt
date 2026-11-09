@@ -16,6 +16,7 @@ class MainActivity : Activity() {
     private val neon = Color.rgb(140, 255, 65)
     private var lightTheme = false
     private var english = false
+    private var selectedDepth = "AUTO"
     private lateinit var content: LinearLayout
     private var activeSection = sections.first()
 
@@ -147,8 +148,36 @@ class MainActivity : Activity() {
                 card(if (ar) "بوابة جودة البيانات" else "Data quality gate",
                     if (ar) "البيانات القديمة أو غير الصالحة لا تُستخدم لإصدار إشارة موثوقة." else "Stale or invalid data is blocked from trusted signal generation.", neon)
             }
-            "ماسح الأسواق" -> card(if (ar) "ماسح الأسواق" else "Market Scanner",
-                if (ar) "جاهز لاستقبال الأسعار والشموع بعد ربط مزود بيانات والتحقق من المصدر والوقت." else "Ready for candles and quotes once a provider is connected and source freshness is verified.")
+            "ماسح الأسواق" -> {
+                card(if (ar) "محرك المسح متعدد الأعماق" else "Multi-depth scanning engine",
+                    if (ar) "اختر مستوى الفحص. العمق الأعلى يدرس بيانات أكثر وقد يحتاج وقتاً وموارد إضافية." else "Choose a scan depth. Higher levels inspect more data and may require additional time and resources.", neon)
+                val depthRow = LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                }
+                val depthOptions = listOf("32", "64", "128", "256", "AUTO")
+                depthOptions.forEach { depth ->
+                    val caption = if (depth == "AUTO") { if (ar) "تلقائي" else "AUTO" } else depth
+                    val item = chip(caption, selectedDepth == depth) {
+                        selectedDepth = depth
+                        showSection("ماسح الأسواق")
+                    }
+                    val params = LinearLayout.LayoutParams(0, -2, 1f)
+                    params.setMargins(2, 4, 2, 4)
+                    depthRow.addView(item, params)
+                }
+                content.addView(depthRow)
+                val depthDescription = when (selectedDepth) {
+                    "32" -> if (ar) "فحص سريع — نطاق بيانات محدود." else "Quick scan — compact data window."
+                    "64" -> if (ar) "فحص متوازن — توازن بين السرعة والتغطية." else "Balanced scan — speed and coverage."
+                    "128" -> if (ar) "فحص متقدم — تحليل أوسع للبيانات المتاحة." else "Advanced scan — broader analysis of available data."
+                    "256" -> if (ar) "فحص عميق — أعلى نطاق حسابي ضمن الخيارات." else "Deep scan — largest computational window."
+                    else -> if (ar) "التلقائي الذكي — يختار المستوى وفق الموارد وجودة البيانات." else "Smart auto — selects a level based on device resources and data quality."
+                }
+                card(if (ar) "العمق المحدد: $selectedDepth" else "Selected depth: $selectedDepth", depthDescription, neon)
+                card(if (ar) "حالة البيانات" else "Data status",
+                    if (ar) "بانتظار ربط مزود بيانات حقيقي. لن تظهر نتائج سوق مباشرة قبل التحقق من المصدر والطابع الزمني." else "Waiting for a live data provider. No live market results are shown before source and timestamp validation.")
+            }
             "صائد الفرص" -> card(if (ar) "محرك صائد الفرص" else "Opportunity engine",
                 if (ar) "سيجمع الاتجاه والزخم والسيولة والتذبذب وتوافق الأطر الزمنية. الثقة ليست احتمال ربح." else "Combines trend, momentum, liquidity, volatility and timeframe alignment. Confidence is not win probability.", neon)
             "غرفة المراقبة" -> card(if (ar) "قوائم المتابعة" else "Watchlists",
