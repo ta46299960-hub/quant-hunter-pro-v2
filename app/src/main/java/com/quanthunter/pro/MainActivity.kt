@@ -1,6 +1,7 @@
 package com.quanthunter.pro
 
 import android.app.Activity
+import android.app.ActivityManager
 import android.os.Bundle
 import android.graphics.Color
 import android.graphics.Typeface
@@ -171,7 +172,21 @@ class MainActivity : Activity() {
         content.addView(box, params)
     }
 
-    /** Fetch a small public BTC/USDT sample off the UI thread and gate it before display. */
+    /** Select a conservative scan depth from available device memory and CPU capacity. */
+    private fun resolvedDepth(): Int {
+        if (selectedDepth != "AUTO") return selectedDepth.toIntOrNull() ?: 64
+        val manager = getSystemService(ACTIVITY_SERVICE) as ActivityManager
+        val memoryMb = manager.memoryClass
+        val cores = Runtime.getRuntime().availableProcessors()
+        return when {
+            memoryMb >= 512 && cores >= 8 -> 256
+            memoryMb >= 256 && cores >= 4 -> 128
+            memoryMb >= 192 && cores >= 2 -> 64
+            else -> 32
+        }
+    }
+
+    /** Fetch a public BTC/USDT sample off the UI thread and gate it before display. */
     private fun loadCryptoSnapshot() {
         val ar = !english
         scannerStatusView?.text = if (ar) "جارٍ الاتصال بمصدر Binance العام..." else "Connecting to public Binance data..."
@@ -181,26 +196,22 @@ class MainActivity : Activity() {
                     symbol = "BTCUSDT",
                     market = MarketType.CRYPTO,
                     interval = CandleInterval.H1,
-                    limit = when (selectedDepth) {
-                        "32" -> 32
-                        "64" -> 64
-                        "128" -> 128
-                        "256" -> 256
-                        else -> 128
-                    }
+                    limit = resolvedDepth()
                 )
             )
             val report = envelope.data?.let {
                 DataQualityValidator().validate(it, CandleInterval.H1, System.currentTimeMillis())
             }
             val message = when {
-                !envelope.isSuccessful -> (if (ar) "تعذر جلب البيانات: " else "Data request failed: ") + (envelope.error ?: "Unknown error")
+                !envelope.isSuccessful || !envelope.isLive -> (if (ar) "تعذر جلب بيانات حية: " else "Live data request failed: ") + (envelope.error ?: "Provider did not confirm live data")
                 report == null || !report.isUsable -> (if (ar) "البيانات مرفوضة بسبب الجودة أو الحداثة. " else "Data rejected by freshness/quality gate. ") + (report?.warnings?.joinToString() ?: "")
                 else -> {
                     val last = report.acceptedCandles.last()
                     val price = String.format(Locale.US, "%.2f", last.close)
-                    if (ar) "BTC/USDT: $price USDT | جودة: ${report.qualityScore}/100 | المصدر: ${envelope.source} | وقت الجلب: ${envelope.fetchedAtEpochMillis}"
-                    else "BTC/USDT: $price USDT | Quality: ${report.qualityScore}/100 | Source: ${envelope.source} | Fetched: ${envelope.fetchedAtEpochMillis}"
+                    val candleTime = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(java.util.Date(last.timestampEpochMillis))
+                    val fetchedTime = java.text.SimpleDateFormat("HH:mm:ss", Locale.US).format(java.util.Date(envelope.fetchedAtEpochMillis))
+                    if (ar) "BTC/USDT: $price USDT | جودة: ${report.qualityScore}/100 | العمق: ${resolvedDepth()} | الشمعة: $candleTime | الجلب: $fetchedTime | المصدر: ${envelope.source}"
+                    else "BTC/USDT: $price USDT | Quality: ${report.qualityScore}/100 | Depth: ${resolvedDepth()} | Candle: $candleTime | Fetched: $fetchedTime | Source: ${envelope.source}"
                 }
             }
             runOnUiThread { scannerStatusView?.text = message }
@@ -262,7 +273,7 @@ class MainActivity : Activity() {
             "مركز القيادة" -> {
                 metricRow(listOf("05" to (if (ar) "فئات أسواق" else "Markets"), "08" to (if (ar) "أقسام" else "Modules"), "HYBRID" to (if (ar) "منهج" else "Model")), gold)
                 card(if (ar) "حالة المنظومة" else "System health",
-                    if (ar) "الواجهة جاهزة. مزودو الأسعار الحقيقية لم يتم ربطهم بعد." else "Interface ready. Live price providers are not connected yet.", neon)
+                    if (ar) "مصدر Binance العام متصل للعملات الرقمية عند فتح الماسح. بقية الأسواق لم تُربط بعد." else "Public Binance data is queried for crypto in the scanner. Other markets are not connected yet.", neon)
                 card(if (ar) "بوابة جودة البيانات" else "Data quality gate",
                     if (ar) "يتم رفض البيانات القديمة أو المشوهة قبل استخدامها في التقييم." else "Stale or malformed data is rejected before scoring.", gold)
                 card(if (ar) "تغطية الأسواق" else "Market coverage", "CRYPTO  •  FOREX  •  STOCKS  •  INDICES  •  COMMODITIES")
@@ -284,8 +295,9 @@ class MainActivity : Activity() {
                     else -> if (ar) "تلقائي ذكي — يحدد العمق وفق موارد الجهاز وجودة البيانات." else "Smart auto — selects depth from device capacity and data quality."
                 }
                 card((if (ar) "الاختيار الحالي: " else "Current selection: ") + selectedDepth, desc, neon)
-                statusCard(if (ar) "بيانات BTC/USDT من مصدر عام" else "BTC/USDT public market data",
-                    if (ar) "سيتم فحص المصدر والحداثة وجودة الشموع قبل عرض السعر." else "Provider, freshness and candle quality are checked before displaying a price.", mutedText)
+                statusCard(if (ar) "بيانات BTC/USDT من مصدر Binance العام" else "BTC/USDT from public Binance",
+                    if (ar) "يتم فحص المصدر والحداثة وجودة الشموع قبل عرض السعر." else "Source, freshness and candle quality are checked before display.", mutedText)
+                content.addView(chip(if (ar) "تحديث البيانات الآن" else "Refresh market data", false) { loadCryptoSnapshot() })
             }
             "صائد الفرص" -> {
                 metricRow(listOf("TREND" to (if (ar) "اتجاه" else "Trend"), "MOM" to (if (ar) "زخم" else "Momentum"), "MTF" to (if (ar) "أطر" else "Frames")), neon)
@@ -330,7 +342,7 @@ class MainActivity : Activity() {
             }
         }
         card(if (ar) "ملاحظة تطوير" else "Development notice",
-            if (ar) "البيانات الحية غير متاحة حتى ربط مزود موثوق. لا توجد توصيات مالية أو ضمانات ربح." else "Live data remains unavailable until a trusted provider is connected. No financial advice or profit guarantees.", mutedText)
+            if (ar) "بيانات العملات الرقمية فقط عبر Binance العام في الماسح. الفوركس والأسهم والمؤشرات والسلع غير متصلة حالياً. لا توجد توصيات مالية أو ضمانات ربح." else "Crypto data only via public Binance in the scanner. Forex, stocks, indices and commodities are not connected yet. No financial advice or profit guarantees.", mutedText)
     }
 
     companion object {
