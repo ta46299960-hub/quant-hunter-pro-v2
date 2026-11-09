@@ -27,6 +27,7 @@ class MainActivity : Activity() {
     private lateinit var content: LinearLayout
     private var scannerStatusView: TextView? = null
     private var activeSection = sections.first()
+    private var scanRequestId = 0
 
     private val screenBg: Int get() = if (lightTheme) Color.rgb(239, 242, 246) else Color.rgb(13, 16, 20)
     private val panelBg: Int get() = if (lightTheme) Color.WHITE else Color.rgb(25, 30, 36)
@@ -63,6 +64,7 @@ class MainActivity : Activity() {
         }
 
     private fun showSection(section: String) {
+        scanRequestId++ // Invalidate responses from the previous screen.
         activeSection = section
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -186,38 +188,49 @@ class MainActivity : Activity() {
         }
     }
 
-    /** Fetch a public BTC/USDT sample off the UI thread and gate it before display. */
+    /** Fetch public BTC/USDT candles off the UI thread and ignore stale screen responses. */
     private fun loadCryptoSnapshot() {
         val ar = !english
+        val requestId = ++scanRequestId
+        val depth = resolvedDepth()
         scannerStatusView?.text = if (ar) "جارٍ الاتصال بمصدر Binance العام..." else "Connecting to public Binance data..."
-        Thread {
-            val envelope = BinanceSpotProvider().fetchCandles(
-                CandleRequest(
-                    symbol = "BTCUSDT",
-                    market = MarketType.CRYPTO,
-                    interval = CandleInterval.H1,
-                    limit = resolvedDepth()
+        Thread({
+            val message = try {
+                val envelope = BinanceSpotProvider().fetchCandles(
+                    CandleRequest(symbol = "BTCUSDT", market = MarketType.CRYPTO, interval = CandleInterval.H1, limit = depth)
                 )
-            )
-            val report = envelope.data?.let {
-                DataQualityValidator().validate(it, CandleInterval.H1, System.currentTimeMillis())
+                val report = envelope.data?.let {
+                    DataQualityValidator().validate(it, CandleInterval.H1, System.currentTimeMillis())
+                }
+                when {
+                    !envelope.isSuccessful || !envelope.isLive ->
+                        (if (ar) "تعذر جلب بيانات حية: " else "Live data request failed: ") + (envelope.error ?: "Provider did not confirm live data")
+                    report == null || !report.isUsable ->
+                        (if (ar) "البيانات مرفوضة بسبب الجودة أو الحداثة. " else "Data rejected by freshness/quality gate. ") + (report?.warnings?.joinToString() ?: "")
+                    else -> {
+                        val last = report.acceptedCandles.last()
+                        val price = String.format(Locale.US, "%.2f", last.close)
+                        val candleTime = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(java.util.Date(last.timestampEpochMillis))
+                        val fetchedTime = java.text.SimpleDateFormat("HH:mm:ss", Locale.US).format(java.util.Date(envelope.fetchedAtEpochMillis))
+                        if (ar) "BTC/USDT: $price USDT | جودة: ${report.qualityScore}/100 | العمق: $depth | الشمعة: $candleTime | الجلب: $fetchedTime | المصدر: ${envelope.source}"
+                        else "BTC/USDT: $price USDT | Quality: ${report.qualityScore}/100 | Depth: $depth | Candle: $candleTime | Fetched: $fetchedTime | Source: ${envelope.source}"
+                    }
+                }
+            } catch (e: Exception) {
+                (if (ar) "حدث خطأ أثناء فحص البيانات: " else "Market data check failed: ") + (e.message ?: "Unexpected error")
             }
-            val message = when {
-                !envelope.isSuccessful || !envelope.isLive -> (if (ar) "تعذر جلب بيانات حية: " else "Live data request failed: ") + (envelope.error ?: "Provider did not confirm live data")
-                report == null || !report.isUsable -> (if (ar) "البيانات مرفوضة بسبب الجودة أو الحداثة. " else "Data rejected by freshness/quality gate. ") + (report?.warnings?.joinToString() ?: "")
-                else -> {
-                    val last = report.acceptedCandles.last()
-                    val price = String.format(Locale.US, "%.2f", last.close)
-                    val candleTime = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(java.util.Date(last.timestampEpochMillis))
-                    val fetchedTime = java.text.SimpleDateFormat("HH:mm:ss", Locale.US).format(java.util.Date(envelope.fetchedAtEpochMillis))
-                    if (ar) "BTC/USDT: $price USDT | جودة: ${report.qualityScore}/100 | العمق: ${resolvedDepth()} | الشمعة: $candleTime | الجلب: $fetchedTime | المصدر: ${envelope.source}"
-                    else "BTC/USDT: $price USDT | Quality: ${report.qualityScore}/100 | Depth: ${resolvedDepth()} | Candle: $candleTime | Fetched: $fetchedTime | Source: ${envelope.source}"
+            runOnUiThread {
+                if (requestId == scanRequestId && activeSection == "ماسح الأسواق" && !isFinishing) {
+                    scannerStatusView?.text = message
                 }
             }
-            runOnUiThread { scannerStatusView?.text = message }
-        }.start()
+        }, "QH-Market-Scanner").apply { isDaemon = true; start() }
     }
 
+    override fun onDestroy() {
+        scanRequestId++
+        super.onDestroy()
+    }
     private fun metricRow(items: List<Pair<String, String>>, accent: Int) {
         val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         items.forEach { item ->
