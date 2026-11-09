@@ -19,7 +19,6 @@ import com.quanthunter.pro.engine.MarketType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.Locale
-import kotlin.math.abs
 
 class MarketAlertWorker(
     appContext: Context,
@@ -36,23 +35,21 @@ class MarketAlertWorker(
             val provider = BinanceSpotProvider()
             for (symbol in symbols) {
                 val response = provider.fetchCandles(
-                    CandleRequest(symbol, MarketType.CRYPTO, CandleInterval.H1, 3)
+                    CandleRequest(symbol, MarketType.CRYPTO, CandleInterval.H1, 5)
                 )
                 val candles = response.data ?: continue
                 if (!response.isSuccessful || !response.isLive || candles.size < 2) continue
                 val quality = DataQualityValidator().validate(candles, CandleInterval.H1, System.currentTimeMillis())
                 if (!quality.isUsable || quality.acceptedCandles.size < 2) continue
 
-                val previous = quality.acceptedCandles[quality.acceptedCandles.lastIndex - 1]
-                val latest = quality.acceptedCandles.last()
-                if (previous.close <= 0.0) continue
-                val change = (latest.close / previous.close - 1.0) * 100.0
-                val key = "alert_last_hour_$symbol"
-                val lastNotified = prefs.getLong(key, 0L)
                 val now = System.currentTimeMillis()
-                if (abs(change) >= 2.0 && now - lastNotified >= 60L * 60L * 1000L) {
-                    postAlert(symbol, change)
-                    prefs.edit().putLong(key, now).apply()
+                val signal = MarketAlertRules.evaluate(symbol, quality.acceptedCandles, now, 2.0) ?: continue
+                val key = "alert_last_closed_candle_$symbol"
+                val lastNotifiedCandle = prefs.getLong(key, 0L)
+                if (signal.candleTimestampEpochMillis > lastNotifiedCandle &&
+                    postAlert(symbol, signal.changePercent)
+                ) {
+                    prefs.edit().putLong(key, signal.candleTimestampEpochMillis).apply()
                 }
             }
             Result.success()
@@ -61,7 +58,7 @@ class MarketAlertWorker(
         }
     }
 
-    private fun postAlert(symbol: String, change: Double) {
+    private fun postAlert(symbol: String, change: Double): Boolean {
         val manager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val channelId = "qh_market_alerts"
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -71,7 +68,7 @@ class MarketAlertWorker(
         }
         if (Build.VERSION.SDK_INT >= 33 &&
             applicationContext.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-        ) return
+        ) return false
 
         val direction = if (change >= 0) "ارتفع" else "انخفض"
         val body = String.format(Locale.US, "%s %s خلال آخر شمعة ساعة: %+.2f%%", symbol, direction, change)
@@ -84,5 +81,6 @@ class MarketAlertWorker(
             .setAutoCancel(true)
             .build()
         NotificationManagerCompat.from(applicationContext).notify(symbol.hashCode(), notification)
+        return true
     }
 }
