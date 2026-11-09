@@ -146,7 +146,7 @@ class MainActivity : Activity() {
         setContentView(root)
         renderContent(section)
         if (section == "ماسح الأسواق") loadCryptoSnapshot()
-        if (section == "صائد الفرص") loadCryptoOpportunity()
+        if (section == "صائد الفرص") loadCryptoOpportunity()\n        if (section == "غرفة المراقبة") loadWatchlist()
     }
 
     private fun sectionTitle(key: String): String {
@@ -305,6 +305,51 @@ class MainActivity : Activity() {
         }, "QH-Market-Scanner").apply { isDaemon = true; start() }
     }
 
+
+
+    /** Fetch the locally saved crypto watchlist from the public Spot provider. */
+    private fun loadWatchlist() {
+        val ar = !english
+        val requestId = ++scanRequestId
+        val symbols = (preferences.getStringSet("watchlist_symbols", setOf("BTCUSDT", "ETHUSDT", "BNBUSDT"))
+            ?: setOf("BTCUSDT")).toList().sorted().take(8)
+        scannerStatusView?.text = if (ar) "جارٍ تحديث قائمة المتابعة..." else "Refreshing watchlist..."
+        Thread({
+            val lines = mutableListOf<String>()
+            try {
+                val provider = BinanceSpotProvider()
+                for (symbol in symbols) {
+                    val envelope = provider.fetchCandles(
+                        CandleRequest(symbol, MarketType.CRYPTO, CandleInterval.H1, 32)
+                    )
+                    val candles = envelope.data
+                    if (!envelope.isSuccessful || !envelope.isLive || candles == null) {
+                        lines += "$symbol: " + (envelope.error ?: if (ar) "لا توجد بيانات حية" else "No live data")
+                        continue
+                    }
+                    val report = DataQualityValidator().validate(candles, CandleInterval.H1, System.currentTimeMillis())
+                    if (!report.isUsable || report.acceptedCandles.size < 25) {
+                        lines += "$symbol: " + if (ar) "بيانات مرفوضة — جودة/حداثة غير كافية" else "Rejected — insufficient quality/freshness"
+                        continue
+                    }
+                    val valid = report.acceptedCandles
+                    val last = valid.last()
+                    val reference = valid[maxOf(0, valid.lastIndex - 24)]
+                    val change = (last.close / reference.close - 1.0) * 100.0
+                    lines += String.format(Locale.US, "%s  %.6f USDT  |  24h* %+.2f%%  |  Q%d/100",
+                        symbol, last.close, change, report.qualityScore)
+                }
+            } catch (e: Exception) {
+                lines += (if (ar) "تعذر تحديث القائمة: " else "Watchlist refresh failed: ") + (e.message ?: "Unexpected error")
+            }
+            val resultText = lines.joinToString("\\n")
+            runOnUiThread {
+                if (requestId == scanRequestId && activeSection == "غرفة المراقبة" && !isFinishing) {
+                    scannerStatusView?.text = resultText
+                }
+            }
+        }, "QH-Watchlist-Refresh").apply { isDaemon = true; start() }
+    }
 
     /** Run a transparent EMA-cross research backtest on validated public BTC/USDT candles. */
     private fun loadHistoricalBacktest() {
@@ -478,10 +523,38 @@ class MainActivity : Activity() {
                     if (ar) "درجة الثقة تعبر عن توافق الأدلة، وليست احتمالاً للربح. التحليل بحثي وليس توصية مالية." else "Confidence measures evidence alignment, not probability of profit. Research only, not financial advice.")
             }
             "غرفة المراقبة" -> {
-                card(if (ar) "قائمة المتابعة" else "Watchlist",
-                    if (ar) "ستظهر الأصول المضافة مع السعر ووقت آخر تحديث ومصدر البيانات بعد الاتصال." else "Tracked assets will show price, last update time and data source after connectivity.", accent)
-                card(if (ar) "مركز التنبيهات" else "Alert center",
-                    if (ar) "تنبيهات الاتجاه والحجم والتذبذب، مع بيان حالة كل تنبيه." else "Trend, volume and volatility alerts with explicit alert status.")
+                card(if (ar) "قائمة متابعة العملات الرقمية" else "Crypto watchlist",
+                    if (ar) "قائمة محلية محفوظة على الجهاز. أدخل رمز Binance مثل ETHUSDT. الحد الأقصى 8 أصول." else "Locally saved list. Enter a Binance symbol such as ETHUSDT. Maximum 8 assets.", accent)
+                val watchSymbols = (preferences.getStringSet("watchlist_symbols", setOf("BTCUSDT", "ETHUSDT", "BNBUSDT"))
+                    ?: setOf("BTCUSDT")).toList().sorted()
+                val symbolField = EditText(this).apply {
+                    hint = if (ar) "رمز العملة (مثال ETHUSDT)" else "Crypto symbol (e.g. ETHUSDT)"
+                    inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS
+                    setTextColor(primaryText)
+                    setHintTextColor(mutedText)
+                    textSize = 14f
+                    setSingleLine(true)
+                    setPadding(16, 8, 16, 8)
+                    background = rounded(panelBg, Color.rgb(80, 86, 94))
+                }
+                content.addView(symbolField, LinearLayout.LayoutParams(-1, -2))
+                content.addView(chip(if (ar) "إضافة إلى القائمة" else "Add to watchlist", false) {
+                    val symbol = symbolField.text.toString().trim().uppercase(Locale.US)
+                    val current = preferences.getStringSet("watchlist_symbols", setOf("BTCUSDT", "ETHUSDT", "BNBUSDT"))
+                        ?.toMutableSet() ?: mutableSetOf("BTCUSDT")
+                    if (!symbol.matches(Regex("[A-Z0-9]{3,20}")) || (symbol !in current && current.size >= 8)) {
+                        scannerStatusView?.text = if (ar) "رمز غير صالح أو وصلت القائمة إلى 8 أصول." else "Invalid symbol or the 8-asset limit has been reached."
+                    } else {
+                        current.add(symbol)
+                        preferences.edit().putStringSet("watchlist_symbols", current).apply()
+                        showSection(section)
+                    }
+                })
+                statusCard(if (ar) "الأسعار وحالة البيانات" else "Prices and data status",
+                    if (ar) "اضغط تحديث لجلب بيانات Spot والتحقق من حداثتها وجودتها." else "Refresh to fetch Spot data and validate freshness and quality.", mutedText)
+                content.addView(chip(if (ar) "تحديث قائمة المتابعة" else "Refresh watchlist", false) { loadWatchlist() })
+                card(if (ar) "التغير التقريبي" else "Approximate change",
+                    if (ar) "التغير محسوب من آخر 25 شمعة ساعة المتاحة (24 فترة تقريباً)، وليس تغير يوم تقويمي مضموناً." else "Change is measured across up to 25 hourly candles (about 24 intervals), not a guaranteed calendar-day return.")
             }
             "التداول التجريبي" -> {
                 metricRow(listOf("PAPER" to (if (ar) "محاكاة" else "Mode"), ("0.00" to (if (ar) "رصيد تجريبي" else "Demo equity")), ("0" to (if (ar) "صفقات" else "Trades"))), accent)
