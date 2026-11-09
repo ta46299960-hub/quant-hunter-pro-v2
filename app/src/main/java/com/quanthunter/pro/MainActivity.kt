@@ -22,6 +22,8 @@ import com.quanthunter.pro.engine.CryptoOpportunityAnalyzer
 import com.quanthunter.pro.engine.Direction
 import com.quanthunter.pro.paper.PaperTradeCalculator
 import com.quanthunter.pro.paper.PaperTradeRequest
+import com.quanthunter.pro.risk.RiskCalculator
+import com.quanthunter.pro.risk.RiskRequest
 import java.util.Locale
 
 class MainActivity : Activity() {
@@ -35,6 +37,7 @@ class MainActivity : Activity() {
     private var activeSection = sections.first()
     private var scanRequestId = 0
     private var paperDirection = Direction.BULLISH
+    private var riskDirection = Direction.BULLISH
 
     private val screenBg: Int get() = if (lightTheme) Color.rgb(239, 242, 246) else Color.rgb(13, 16, 20)
     private val panelBg: Int get() = if (lightTheme) Color.WHITE else Color.rgb(25, 30, 36)
@@ -463,10 +466,58 @@ class MainActivity : Activity() {
             }
             "إدارة المخاطر" -> {
                 metricRow(listOf("RISK" to (if (ar) "مخاطرة" else "Risk"), "STOP" to (if (ar) "وقف" else "Stop"), "CAP" to (if (ar) "تعرض" else "Exposure")), accent)
-                card(if (ar) "حاسبة حجم المركز" else "Position sizing",
-                    if (ar) "تحسب الحجم من رأس المال ونسبة المخاطرة وسعر الدخول والوقف، مع حد أقصى للتعرض." else "Calculates size from equity, risk fraction, entry and stop, with a maximum exposure cap.", accent)
-                card(if (ar) "فحوص ما قبل الصفقة" else "Pre-trade checks",
-                    if (ar) "رفض الاتجاه المحايد أو الوقف غير الصحيح أو تجاوز حدود المخاطر." else "Rejects neutral direction, invalid stops and risk-limit breaches.", neon)
+                card(if (ar) "حاسبة حجم المركز" else "Position sizing calculator",
+                    if (ar) "أدخل رأس المال ونسبة المخاطرة وسعر الدخول والوقف. يتم حساب الحجم وحد التعرض قبل أي محاكاة." else "Enter equity, risk percentage, entry and stop. Position size and exposure cap are calculated before simulation.", accent)
+                val sideRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+                sideRow.addView(chip(if (ar) "شراء / صعود" else "LONG", riskDirection == Direction.BULLISH) { riskDirection = Direction.BULLISH; showSection(section) })
+                sideRow.addView(chip(if (ar) "بيع / هبوط" else "SHORT", riskDirection == Direction.BEARISH) { riskDirection = Direction.BEARISH; showSection(section) })
+                content.addView(sideRow)
+                fun riskField(hintText: String): EditText = EditText(this).apply {
+                    hint = hintText
+                    inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
+                    setTextColor(primaryText)
+                    setHintTextColor(mutedText)
+                    textSize = 14f
+                    setSingleLine(true)
+                    setPadding(16, 8, 16, 8)
+                    background = rounded(panelBg, Color.rgb(80, 86, 94))
+                    val p = LinearLayout.LayoutParams(-1, -2)
+                    p.setMargins(0, 5, 0, 5)
+                    content.addView(this, p)
+                }
+                val equityField = riskField(if (ar) "رأس المال (مثال: 1000)" else "Account equity (e.g. 1000)")
+                val riskField = riskField(if (ar) "نسبة المخاطرة % (0.1 إلى 5)" else "Risk percent (0.1 to 5)")
+                val entryField = riskField(if (ar) "سعر الدخول" else "Entry price")
+                val stopField = riskField(if (ar) "سعر وقف الخسارة" else "Stop price")
+                statusCard(if (ar) "نتيجة إدارة المخاطر" else "Risk calculation",
+                    if (ar) "أدخل القيم واحسب حجم المركز." else "Enter values and calculate position size.", mutedText)
+                content.addView(chip(if (ar) "احسب حجم المركز" else "Calculate position size", false) {
+                    val result = try {
+                        RiskCalculator().calculate(
+                            RiskRequest(
+                                accountEquity = equityField.text.toString().toDouble(),
+                                riskPercent = riskField.text.toString().toDouble(),
+                                entryPrice = entryField.text.toString().toDouble(),
+                                stopPrice = stopField.text.toString().toDouble(),
+                                direction = riskDirection
+                            )
+                        )
+                    } catch (e: Exception) {
+                        scannerStatusView?.text = if (ar) "قيم غير صالحة: تحقق من رأس المال والوقف ونسبة المخاطرة واتجاه الصفقة." else "Invalid inputs: check equity, stop, risk percent and trade direction."
+                        null
+                    }
+                    if (result != null) {
+                        scannerStatusView?.text = String.format(
+                            Locale.US,
+                            if (ar) "الكمية: %.6f | قيمة المركز: %.2f | الخسارة المقدرة عند الوقف: %.2f | المخاطرة الفعلية: %.2f%% | تم تطبيق حد التعرض: %s"
+                            else "Quantity: %.6f | Notional: %.2f | Estimated stop loss: %.2f | Effective risk: %.2f%% | Exposure cap applied: %s",
+                            result.quantity, result.notionalExposure, result.estimatedStopLoss,
+                            result.effectiveRiskPercent, result.exposureCapApplied.toString()
+                        )
+                    }
+                })
+                card(if (ar) "حدود الحماية" else "Safety limits",
+                    if (ar) "نسبة المخاطرة 0.1% إلى 5% وحد التعرض الافتراضي 25%. النتيجة تقديرية ولا تشمل فجوات الأسعار أو تغير السيولة." else "Risk is limited to 0.1%–5% and default exposure cap is 25%. Estimates do not cover price gaps or changing liquidity.", neon)
             }
             else -> {
                 card(if (ar) "التخصيص" else "Preferences",
