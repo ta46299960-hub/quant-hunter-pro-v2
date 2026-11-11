@@ -41,6 +41,21 @@ class DataQualityValidatorTest {
         assertTrue(result.acceptedCandles.any { it.timestampEpochMillis == now - 60_000 })
     }
 
+    @Test fun excludesCurrentFormingCandleUntilItsIntervalCloses() {
+        val previous = candle(now - 120_000)
+        val forming = candle(now - 30_000)
+        val beforeClose = validator.validate(listOf(previous, forming), CandleInterval.M1, now)
+        assertEquals(1, beforeClose.formingCount)
+        assertEquals(1, beforeClose.acceptedCandles.size)
+        assertFalse(beforeClose.isUsable)
+        assertTrue(beforeClose.warnings.any { it.contains("still-open") })
+
+        val atClose = validator.validate(listOf(previous, forming), CandleInterval.M1, now + 30_000)
+        assertEquals(0, atClose.formingCount)
+        assertEquals(2, atClose.acceptedCandles.size)
+        assertTrue(atClose.isUsable)
+    }
+
     @Test fun marksOldDataAsStale() {
         val result = validator.validate(listOf(candle(now - 600_000), candle(now - 540_000)), CandleInterval.M1, now)
         assertFalse(result.isFresh)

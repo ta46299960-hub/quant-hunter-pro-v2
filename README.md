@@ -7,7 +7,7 @@ Independent Android market-research application (first release candidate).
 - Eight-section native Android interface with charcoal/black, gold and fluorescent-green styling.
 - Arabic/English language toggle and dark/light theme, with preferences saved locally.
 - Market scanner depth choices: 32, 64, 128, 256 and AUTO.
-- Public Binance Spot crypto candles with source, fetch time, candle time and quality checks; the watchlist stores up to eight symbols locally.
+- Public Binance Spot crypto candles with source, fetch time, candle time and quality checks; only fully closed candles enter analysis, and depth counts completed candles. The watchlist stores up to eight symbols locally.
 - Multi-asset crypto watchlist with quality/freshness checks, plus conservative BTC/USDT opportunity assessment using 15m, 1h and 4h candles. A directional assessment is withheld when data quality, freshness or timeframe agreement is insufficient.
 - Paper-trade calculator with configurable code-level fee/slippage assumptions; no broker connection or real orders.
 - Risk position sizing with stop-distance and exposure-cap checks.

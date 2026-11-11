@@ -35,7 +35,7 @@ class MarketAlertWorker(
             val provider = BinanceSpotProvider()
             for (symbol in symbols) {
                 val response = provider.fetchCandles(
-                    CandleRequest(symbol, MarketType.CRYPTO, CandleInterval.H1, 5)
+                    CandleRequest(symbol, MarketType.CRYPTO, CandleInterval.H1, 6)
                 )
                 val candles = response.data ?: continue
                 if (!response.isSuccessful || !response.isLive || candles.size < 2) continue

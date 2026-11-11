@@ -14,6 +14,16 @@ class CryptoOpportunityAnalyzerTest {
         assertNull(result)
     }
 
+    @Test fun thirtyTwoRawCandlesAreInsufficientWhenOneIsStillForming() {
+        val now = 2_000_000_000_000L
+        val data = mapOf(
+            CandleInterval.M15 to risingCandles(100.0, 32, CandleInterval.M15.durationMillis, now),
+            CandleInterval.H1 to risingCandles(100.0, 32, CandleInterval.H1.durationMillis, now),
+            CandleInterval.H4 to risingCandles(100.0, 32, CandleInterval.H4.durationMillis, now)
+        )
+        assertNull(analyzer.assess("BTCUSDT", data, now + 1))
+    }
+
     @Test fun validAlignedTimeframesProduceExplainableAssessment() {
         val now = 2_000_000_000_000L
         val data = mapOf(

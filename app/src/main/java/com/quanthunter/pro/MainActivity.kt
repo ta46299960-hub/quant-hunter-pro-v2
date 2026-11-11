@@ -283,7 +283,7 @@ class MainActivity : Activity() {
                 val intervals = listOf(CandleInterval.M15, CandleInterval.H1, CandleInterval.H4)
                 var failure: String? = null
                 for (interval in intervals) {
-                    val envelope = provider.fetchCandles(CandleRequest("BTCUSDT", MarketType.CRYPTO, interval, depth))
+                    val envelope = provider.fetchCandles(CandleRequest("BTCUSDT", MarketType.CRYPTO, interval, depth + 1))
                     if (!envelope.isSuccessful || !envelope.isLive || envelope.data == null) {
                         failure = "${interval.name}: ${envelope.error ?: "Live provider data unavailable"}"
                         break
@@ -295,8 +295,8 @@ class MainActivity : Activity() {
                 } else {
                     val assessment = CryptoOpportunityAnalyzer().assess("BTCUSDT", candles, System.currentTimeMillis())
                     if (assessment == null) {
-                        if (ar) "الأدلة غير كافية: نحتاج 32 شمعة صالحة وحديثة على كل إطار 15m و1h و4h."
-                        else "Insufficient evidence: at least 32 valid, fresh candles are required on 15m, 1h and 4h."
+                        if (ar) "الأدلة غير كافية: نحتاج 32 شمعة مغلقة صالحة وحديثة على كل إطار 15m و1h و4h."
+                        else "Insufficient evidence: at least 32 valid, fresh, fully closed candles are required on 15m, 1h and 4h."
                     } else {
                         val direction = when (assessment.direction) {
                             com.quanthunter.pro.engine.Direction.BULLISH -> if (ar) "صاعد" else "BULLISH"
@@ -327,7 +327,7 @@ class MainActivity : Activity() {
         Thread({
             val message = try {
                 val envelope = BinanceSpotProvider().fetchCandles(
-                    CandleRequest(symbol = "BTCUSDT", market = MarketType.CRYPTO, interval = CandleInterval.H1, limit = depth)
+                    CandleRequest(symbol = "BTCUSDT", market = MarketType.CRYPTO, interval = CandleInterval.H1, limit = depth + 1)
                 )
                 val report = envelope.data?.let {
                     DataQualityValidator().validate(it, CandleInterval.H1, System.currentTimeMillis())
@@ -372,7 +372,7 @@ class MainActivity : Activity() {
                 val provider = BinanceSpotProvider()
                 for (symbol in symbols) {
                     val envelope = provider.fetchCandles(
-                        CandleRequest(symbol, MarketType.CRYPTO, CandleInterval.H1, 32)
+                        CandleRequest(symbol, MarketType.CRYPTO, CandleInterval.H1, 33)
                     )
                     val candles = envelope.data
                     if (!envelope.isSuccessful || !envelope.isLive || candles == null) {
@@ -412,7 +412,7 @@ class MainActivity : Activity() {
         Thread({
             val message = try {
                 val envelope = BinanceSpotProvider().fetchCandles(
-                    CandleRequest("BTCUSDT", MarketType.CRYPTO, CandleInterval.H1, depth)
+                    CandleRequest("BTCUSDT", MarketType.CRYPTO, CandleInterval.H1, depth + 1)
                 )
                 val raw = envelope.data
                 if (!envelope.isSuccessful || !envelope.isLive || raw == null) {
@@ -544,7 +544,7 @@ class MainActivity : Activity() {
                 card(if (ar) "تغطية الأسواق" else "Market coverage", "CRYPTO  •  FOREX  •  STOCKS  •  INDICES  •  COMMODITIES")
             }
             "ماسح الأسواق" -> {
-                card(if (ar) "مستويات عمق الفحص" else "Scan depth", if (ar) "اختر نطاق التحليل. العمق الأكبر قد يحتاج موارد ووقتاً أكثر." else "Choose the analysis window. Higher depth may need more time and device resources.", accent)
+                card(if (ar) "مستويات عمق الفحص" else "Scan depth", if (ar) "العمق هو عدد الشموع المغلقة المطلوبة؛ تُستبعد الشمعة الحالية غير المكتملة. النطاق الأكبر قد يحتاج موارد ووقتاً أكثر." else "Depth is the requested count of fully closed candles; the current incomplete candle is excluded. Higher depth may need more time and device resources.", accent)
                 val depthRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
                 listOf("32", "64", "128", "256", "AUTO").forEach { depth ->
                     val caption = if (depth == "AUTO" && ar) "تلقائي" else depth

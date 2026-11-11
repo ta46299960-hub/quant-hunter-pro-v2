@@ -9,7 +9,7 @@ The V2 engine must not treat a provider response as trustworthy merely because a
 - Never commit credentials, private keys, or user API secrets.
 
 ## Candle validation
-`DataQualityValidator` sorts candles, removes duplicate timestamps, rejects malformed OHLCV values and future timestamps, and checks freshness against the requested interval. A report is usable only when it contains at least two valid candles, is fresh, and has a quality score of at least 60.
+`DataQualityValidator` sorts candles, excludes the currently forming interval until its close time, removes duplicate timestamps, rejects malformed OHLCV values and future timestamps, and checks freshness using the latest fully closed candle. A report is usable only when it contains at least two valid candles, is fresh, and has a quality score of at least 60.
 
 ## Status honesty
 - A provider's `isLive` flag is metadata, not proof of exchange execution-time freshness.
