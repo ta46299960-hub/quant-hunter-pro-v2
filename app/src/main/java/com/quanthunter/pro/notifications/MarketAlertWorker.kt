@@ -10,7 +10,6 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import com.quanthunter.pro.R
 import com.quanthunter.pro.data.BinanceSpotProvider
 import com.quanthunter.pro.data.CandleInterval
 import com.quanthunter.pro.data.CandleRequest
@@ -18,7 +17,6 @@ import com.quanthunter.pro.data.DataQualityValidator
 import com.quanthunter.pro.engine.MarketType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.util.Locale
 
 class MarketAlertWorker(
     appContext: Context,
@@ -70,13 +68,14 @@ class MarketAlertWorker(
             applicationContext.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) return false
 
-        val direction = if (change >= 0) "ارتفع" else "انخفض"
-        val body = String.format(Locale.US, "%s %s خلال آخر شمعة ساعة: %+.2f%%", symbol, direction, change)
+        val english = applicationContext.getSharedPreferences("qh_preferences", Context.MODE_PRIVATE)
+            .getBoolean("english_language", false)
+        val message = MarketAlertMessageFormatter.format(symbol, change, english)
         val notification = NotificationCompat.Builder(applicationContext, channelId)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentTitle("QUANT HUNTER PRO — تنبيه سوق")
-            .setContentText(body)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setContentTitle(message.title)
+            .setContentText(message.body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(message.body))
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
             .build()

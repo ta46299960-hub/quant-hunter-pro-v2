@@ -12,7 +12,7 @@ Independent Android market-research application (first release candidate).
 - Paper-trade calculator with configurable code-level fee/slippage assumptions; no broker connection or real orders.
 - Risk position sizing with stop-distance and exposure-cap checks.
 - Historical BTC/USDT 1h EMA-cross research backtest, including fees, spread, slippage, maximum drawdown and a chronological 70%/30% in-sample/out-of-sample split.
-- Scheduled background crypto price alerts through Android WorkManager, with network constraints, notification permission handling and a 2% hourly-candle movement threshold.
+- Scheduled bilingual background crypto price alerts through Android WorkManager, with network constraints, notification permission handling and a 2% fully closed hourly-candle movement threshold.
 - Unit tests for data quality, multi-timeframe assessment, paper trading, risk sizing and backtesting.
 
 ## Market coverage
