@@ -63,6 +63,7 @@ class DataQualityValidatorTest {
             now
         )
         assertEquals(1, result.gapCount)
+        assertTrue(result.qualityScore < 100)
         assertTrue(result.warnings.any { it.contains("missing or irregular") })
         assertFalse(result.isUsable)
     }
