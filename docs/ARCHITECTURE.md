@@ -10,7 +10,7 @@
 
 ## Android task lifecycle
 
-UI-triggered market requests run through a single latest-request-wins worker. Navigating between sections cancels obsolete work, and Activity destruction shuts the worker down. This bounds background threads during repeated refreshes; provider connect/read timeouts remain the upper bound for blocking network I/O.
+UI-triggered market requests run through a single latest-request-wins worker. Navigating between sections cancels obsolete work, and Activity destruction shuts the worker down. The worker has a one-entry pending queue with a discard-oldest policy, so rapid refresh taps cannot accumulate an unbounded backlog while a previous provider call is blocked. Provider connect/read timeouts remain the upper bound for blocking network I/O; cancellation prevents stale UI updates but cannot guarantee immediate interruption of every platform socket operation.
 
 ## Market-specific policy
 

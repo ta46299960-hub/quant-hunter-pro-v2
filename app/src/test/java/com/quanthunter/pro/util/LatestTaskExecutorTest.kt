@@ -3,7 +3,9 @@ package com.quanthunter.pro.util
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -44,6 +46,56 @@ class LatestTaskExecutorTest {
             assertTrue("Latest task should execute", latestFinished.await(2, TimeUnit.SECONDS))
             assertEquals(1, maxConcurrentTasks.get())
         } finally {
+            runner.close()
+        }
+    }
+
+    @Test
+    fun rapidReplacementsKeepQueueBoundedAndRunOnlyNewestPendingTask() {
+        val executor = ThreadPoolExecutor(
+            1,
+            1,
+            0L,
+            TimeUnit.MILLISECONDS,
+            ArrayBlockingQueue(1),
+            { runnable -> Thread(runnable, "QH-Test-Market-Worker").apply { isDaemon = true } },
+            ThreadPoolExecutor.DiscardOldestPolicy()
+        )
+        val runner = LatestTaskExecutor(executor)
+        val firstStarted = CountDownLatch(1)
+        val releaseFirst = CountDownLatch(1)
+        val latestFinished = CountDownLatch(1)
+        val pendingExecutions = AtomicInteger()
+
+        try {
+            runner.submit {
+                firstStarted.countDown()
+                var released = false
+                while (!released) {
+                    try {
+                        releaseFirst.await()
+                        released = true
+                    } catch (_: InterruptedException) {
+                        // Simulate a blocking provider call that exits only at its timeout.
+                    }
+                }
+            }
+            assertTrue("First market task should start", firstStarted.await(2, TimeUnit.SECONDS))
+
+            repeat(100) { index ->
+                runner.submit {
+                    pendingExecutions.incrementAndGet()
+                    if (index == 99) latestFinished.countDown()
+                }
+                assertTrue("Pending market queue must stay bounded", executor.queue.size <= 1)
+            }
+
+            assertEquals("Only one pending request may be queued", 1, executor.queue.size)
+            releaseFirst.countDown()
+            assertTrue("Newest pending request should execute", latestFinished.await(2, TimeUnit.SECONDS))
+            assertEquals("Superseded pending requests must not execute", 1, pendingExecutions.get())
+        } finally {
+            releaseFirst.countDown()
             runner.close()
         }
     }

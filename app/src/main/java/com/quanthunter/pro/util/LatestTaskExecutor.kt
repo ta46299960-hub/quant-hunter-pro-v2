@@ -1,17 +1,27 @@
 package com.quanthunter.pro.util
 
-import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
+import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.Future
+import java.util.concurrent.ThreadPoolExecutor
+import java.util.concurrent.TimeUnit
 
 /**
  * Keeps UI-triggered market work bounded and latest-request-wins.
- * A single worker prevents rapid navigation or refresh taps from spawning unbounded threads.
+ *
+ * One worker serializes blocking provider calls. A one-entry queue and discard-oldest
+ * policy prevent rapid refresh taps from building an unbounded backlog while a
+ * previous network request is still waiting for its configured timeout.
  */
 class LatestTaskExecutor(
-    private val executor: ExecutorService = Executors.newSingleThreadExecutor { runnable ->
-        Thread(runnable, "QH-Market-Worker").apply { isDaemon = true }
-    }
+    private val executor: ThreadPoolExecutor = ThreadPoolExecutor(
+        1,
+        1,
+        0L,
+        TimeUnit.MILLISECONDS,
+        ArrayBlockingQueue(1),
+        { runnable -> Thread(runnable, "QH-Market-Worker").apply { isDaemon = true } },
+        ThreadPoolExecutor.DiscardOldestPolicy()
+    )
 ) : AutoCloseable {
     private var activeTask: Future<*>? = null
 
