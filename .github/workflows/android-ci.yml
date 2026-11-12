@@ -40,7 +40,10 @@ jobs:
           test -x "$SIGNER"
           test -x "$AAPT"
           "$SIGNER" verify --verbose "$APK"
-          "$AAPT" dump badging "$APK" | grep -F "package: name='com.quanthunter.pro.v2'"
+          BADGING="$("$AAPT" dump badging "$APK")"
+          grep -F "package: name='com.quanthunter.pro.v2'" <<<"$BADGING"
+          grep -F "versionCode='1'" <<<"$BADGING"
+          grep -F "versionName='2.0.0'" <<<"$BADGING"
           sha256sum "$APK"
       - name: Upload installable debug APK
         uses: actions/upload-artifact@v4
