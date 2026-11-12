@@ -8,6 +8,10 @@
 4. Data providers: provider interfaces and adapters isolated from the scoring engine. Every quote carries source, timestamp and status.
 5. Quality: unit tests, deterministic replay fixtures, backtest validation and CI APK builds.
 
+## Android task lifecycle
+
+UI-triggered market requests run through a single latest-request-wins worker. Navigating between sections cancels obsolete work, and Activity destruction shuts the worker down. This bounds background threads during repeated refreshes; provider connect/read timeouts remain the upper bound for blocking network I/O.
+
 ## Market-specific policy
 
 The hybrid model shares a market-wide regime view but uses separate profiles for crypto, FX, equities, indices and commodities. A single universal threshold is not assumed to fit all instruments.

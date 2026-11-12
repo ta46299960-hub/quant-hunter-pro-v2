@@ -31,6 +31,7 @@ import com.quanthunter.pro.paper.PaperTradeRequest
 import com.quanthunter.pro.risk.RiskCalculator
 import com.quanthunter.pro.risk.RiskRequest
 import com.quanthunter.pro.notifications.MarketAlertWorker
+import com.quanthunter.pro.util.LatestTaskExecutor
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
@@ -49,6 +50,7 @@ class MainActivity : Activity() {
     private var scannerStatusView: TextView? = null
     private var activeSection = sections.first()
     private var scanRequestId = 0
+    private val marketTasks = LatestTaskExecutor()
     private var paperDirection = Direction.BULLISH
     private var riskDirection = Direction.BULLISH
     private val notificationPermissionRequest = 2201
@@ -137,6 +139,7 @@ class MainActivity : Activity() {
 
     private fun showSection(section: String) {
         scanRequestId++ // Invalidate responses from the previous screen.
+        marketTasks.cancel()
         activeSection = section
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -276,7 +279,7 @@ class MainActivity : Activity() {
         val requestId = ++scanRequestId
         val depth = resolvedDepth()
         scannerStatusView?.text = if (ar) "جارٍ جمع بيانات 15m و1h و4h..." else "Fetching 15m, 1h and 4h market data..."
-        Thread({
+        marketTasks.submit {
             val message = try {
                 val provider = BinanceSpotProvider()
                 val candles = linkedMapOf<CandleInterval, List<com.quanthunter.pro.data.Candle>>()
@@ -315,7 +318,7 @@ class MainActivity : Activity() {
             runOnUiThread {
                 if (requestId == scanRequestId && activeSection == "صائد الفرص" && !isFinishing) scannerStatusView?.text = message
             }
-        }, "QH-Opportunity-Analysis").apply { isDaemon = true; start() }
+        }
     }
 
     /** Fetch public BTC/USDT candles off the UI thread and ignore stale screen responses. */
@@ -324,7 +327,7 @@ class MainActivity : Activity() {
         val requestId = ++scanRequestId
         val depth = resolvedDepth()
         scannerStatusView?.text = if (ar) "جارٍ الاتصال بمصدر Binance العام..." else "Connecting to public Binance data..."
-        Thread({
+        marketTasks.submit {
             val message = try {
                 val envelope = BinanceSpotProvider().fetchCandles(
                     CandleRequest(symbol = "BTCUSDT", market = MarketType.CRYPTO, interval = CandleInterval.H1, limit = depth + 1)
@@ -354,7 +357,7 @@ class MainActivity : Activity() {
                     scannerStatusView?.text = message
                 }
             }
-        }, "QH-Market-Scanner").apply { isDaemon = true; start() }
+        }
     }
 
 
@@ -366,7 +369,7 @@ class MainActivity : Activity() {
         val symbols = (preferences.getStringSet("watchlist_symbols", setOf("BTCUSDT", "ETHUSDT", "BNBUSDT"))
             ?: setOf("BTCUSDT")).toList().sorted().take(8)
         scannerStatusView?.text = if (ar) "جارٍ تحديث قائمة المتابعة..." else "Refreshing watchlist..."
-        Thread({
+        marketTasks.submit {
             val lines = mutableListOf<String>()
             try {
                 val provider = BinanceSpotProvider()
@@ -400,7 +403,7 @@ class MainActivity : Activity() {
                     scannerStatusView?.text = resultText
                 }
             }
-        }, "QH-Watchlist-Refresh").apply { isDaemon = true; start() }
+        }
     }
 
     /** Run a transparent EMA-cross research backtest on validated public BTC/USDT candles. */
@@ -409,7 +412,7 @@ class MainActivity : Activity() {
         val requestId = ++scanRequestId
         val depth = maxOf(resolvedDepth(), 64)
         scannerStatusView?.text = if (ar) "جارٍ جلب شموع BTC/USDT التاريخية وفحص جودتها..." else "Fetching and validating historical BTC/USDT candles..."
-        Thread({
+        marketTasks.submit {
             val message = try {
                 val envelope = BinanceSpotProvider().fetchCandles(
                     CandleRequest("BTCUSDT", MarketType.CRYPTO, CandleInterval.H1, depth + 1)
@@ -468,7 +471,7 @@ class MainActivity : Activity() {
             runOnUiThread {
                 if (requestId == scanRequestId && activeSection == "مختبر التحليل" && !isFinishing) scannerStatusView?.text = message
             }
-        }, "QH-Historical-Backtest").apply { isDaemon = true; start() }
+        }
     }
 
     private fun emaValue(values: List<Double>): Double {
@@ -481,6 +484,7 @@ class MainActivity : Activity() {
 
     override fun onDestroy() {
         scanRequestId++
+        marketTasks.close()
         super.onDestroy()
     }
     private fun metricRow(items: List<Pair<String, String>>, accent: Int) {
