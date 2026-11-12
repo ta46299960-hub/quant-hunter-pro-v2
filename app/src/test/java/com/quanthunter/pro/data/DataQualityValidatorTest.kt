@@ -42,7 +42,7 @@ class DataQualityValidatorTest {
     }
 
     @Test fun excludesCurrentFormingCandleUntilItsIntervalCloses() {
-        val previous = candle(now - 120_000)
+        val previous = candle(now - 90_000)
         val forming = candle(now - 30_000)
         val beforeClose = validator.validate(listOf(previous, forming), CandleInterval.M1, now)
         assertEquals(1, beforeClose.formingCount)
@@ -54,6 +54,30 @@ class DataQualityValidatorTest {
         assertEquals(0, atClose.formingCount)
         assertEquals(2, atClose.acceptedCandles.size)
         assertTrue(atClose.isUsable)
+    }
+
+    @Test fun rejectsGapsInOtherwiseFreshCandleSeries() {
+        val result = validator.validate(
+            listOf(candle(now - 180_000), candle(now - 60_000)),
+            CandleInterval.M1,
+            now
+        )
+        assertEquals(1, result.gapCount)
+        assertTrue(result.warnings.any { it.contains("missing or irregular") })
+        assertFalse(result.isUsable)
+    }
+
+    @Test fun acceptsContiguousCandlesAfterDuplicateRemoval() {
+        val first = candle(now - 120_000)
+        val second = candle(now - 60_000)
+        val result = validator.validate(
+            listOf(first, second, second),
+            CandleInterval.M1,
+            now
+        )
+        assertEquals(1, result.duplicateCount)
+        assertEquals(0, result.gapCount)
+        assertTrue(result.isUsable)
     }
 
     @Test fun marksOldDataAsStale() {

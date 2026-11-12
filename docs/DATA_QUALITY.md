@@ -9,7 +9,7 @@ The V2 engine must not treat a provider response as trustworthy merely because a
 - Never commit credentials, private keys, or user API secrets.
 
 ## Candle validation
-`DataQualityValidator` sorts candles, excludes the currently forming interval until its close time, removes duplicate timestamps, rejects malformed OHLCV values and future timestamps, and checks freshness using the latest fully closed candle. A report is usable only when it contains at least two valid candles, is fresh, and has a quality score of at least 60.
+`DataQualityValidator` sorts candles, excludes the currently forming interval until its close time, removes duplicate timestamps, rejects malformed OHLCV values and future timestamps, checks freshness using the latest fully closed candle, and detects missing or irregular intervals between accepted candles. A report is usable only when it contains at least two valid candles, is fresh, has no interval gaps, and has a quality score of at least 60. The current crypto candle streams are expected to be continuous; future session-based providers must add market-session-aware gap rules rather than weakening this crypto gate.
 
 ## Status honesty
 - A provider's `isLive` flag is metadata, not proof of exchange execution-time freshness.

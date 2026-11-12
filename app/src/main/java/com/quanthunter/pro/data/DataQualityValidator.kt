@@ -5,12 +5,13 @@ data class DataQualityReport(
     val rejectedCount: Int,
     val duplicateCount: Int,
     val formingCount: Int,
+    val gapCount: Int,
     val isFresh: Boolean,
     val qualityScore: Int,
     val warnings: List<String>
 ) {
     val isUsable: Boolean
-        get() = acceptedCandles.size >= 2 && isFresh && qualityScore >= 60
+        get() = acceptedCandles.size >= 2 && isFresh && qualityScore >= 60 && gapCount == 0
 }
 
 /** Conservative validation: only fully closed, well-formed, unique candles are accepted. */
@@ -48,23 +49,35 @@ class DataQualityValidator {
             accepted += candle
         }
 
+        var gaps = 0
+        for (index in 1 until accepted.size) {
+            val delta = accepted[index].timestampEpochMillis - accepted[index - 1].timestampEpochMillis
+            if (delta != interval.durationMillis) {
+                val expectedSteps = delta / interval.durationMillis +
+                    if (delta % interval.durationMillis == 0L) 0L else 1L
+                gaps += (expectedSteps - 1L).coerceAtLeast(1L).toInt()
+            }
+        }
+
         val latest = accepted.lastOrNull()?.timestampEpochMillis
         val fresh = latest != null && nowMillis - latest <= interval.durationMillis * maxAgeIntervals
         val warnings = buildList {
             if (rejected > 0) add("$rejected malformed or future-dated candle(s) rejected")
             if (duplicates > 0) add("$duplicates duplicate candle(s) ignored")
             if (forming > 0) add("$forming still-open candle(s) excluded")
+            if (gaps > 0) add("$gaps missing or irregular candle interval(s) detected")
             if (!fresh) add("Latest fully closed candle is missing or stale")
             if (accepted.size < 2) add("At least two valid candles are required")
         }
         val total = candles.size.coerceAtLeast(1)
         val integrity = ((accepted.size.toDouble() / total) * 100.0).toInt()
-        val score = (integrity - if (fresh) 0 else 40).coerceIn(0, 100)
+        val score = (integrity - if (fresh) 0 else 40 - (gaps * 10).coerceAtMost(40)).coerceIn(0, 100)
         return DataQualityReport(
             acceptedCandles = accepted,
             rejectedCount = rejected,
             duplicateCount = duplicates,
             formingCount = forming,
+            gapCount = gaps,
             isFresh = fresh,
             qualityScore = score,
             warnings = warnings
