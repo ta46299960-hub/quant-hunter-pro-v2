@@ -71,7 +71,9 @@ class DataQualityValidator {
         }
         val total = candles.size.coerceAtLeast(1)
         val integrity = ((accepted.size.toDouble() / total) * 100.0).toInt()
-        val score = (integrity - if (fresh) 0 else 40 - (gaps * 10).coerceAtMost(40)).coerceIn(0, 100)
+        val freshnessPenalty = if (fresh) 0 else 40
+        val gapPenalty = (gaps * 10).coerceAtMost(40)
+        val score = (integrity - freshnessPenalty - gapPenalty).coerceIn(0, 100)
         return DataQualityReport(
             acceptedCandles = accepted,
             rejectedCount = rejected,
